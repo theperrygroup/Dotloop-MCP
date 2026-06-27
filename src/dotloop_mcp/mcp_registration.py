@@ -345,7 +345,4 @@ def _register_resources(mcp: FastMCP, *, project_root: Path) -> None:
         mime_type="text/markdown",
     )
     def dotloop_library_method_coverage() -> str:
-        docs_path = project_root / "docs" / "api" / "dotloop-library-method-coverage.md"
-        if docs_path.exists():
-            return docs_path.read_text()
         return METHOD_COVERAGE_MARKDOWN
