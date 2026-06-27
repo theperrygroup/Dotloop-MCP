@@ -34,6 +34,9 @@ export DOTLOOP_ACCESS_TOKEN="..."
 The legacy `DOTLOOP_API_KEY` variable is also accepted because the underlying
 `dotloop` package uses that name.
 
+Use `.env.example` for the supported non-secret variable names. Keep real
+values in your shell or a local ignored `.env` file.
+
 ## Run
 
 ```bash
