@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dotloop MCP Planning"
+  short_description: "Plan Dotloop MCP workstreams"
+  default_prompt: "Use $dotloop-mcp-implementation-planning to turn this Dotloop MCP implementation idea into a phased plan."
