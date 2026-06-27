@@ -12,6 +12,7 @@ from typing import Any
 
 import anyio
 import pytest
+from pydantic import AnyUrl
 from tests.conftest import FakeDotloopClient
 
 from dotloop_mcp.config import DotloopServerSettings
@@ -21,6 +22,7 @@ from dotloop_mcp.services import DotloopService
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamable_http_client
+from mcp.types import TextResourceContents
 
 EXPECTED_TOOLS = {
     "dotloop_get_account",
@@ -221,11 +223,15 @@ async def test_stdio_client_can_list_and_call_representative_tool() -> None:
         async with ClientSession(read_stream, write_stream) as session:
             await session.initialize()
             tools = await session.list_tools()
+            coverage_resource = await session.read_resource(AnyUrl(COVERAGE_RESOURCE_URI))
             result = await session.call_tool("dotloop_get_account", {})
 
     tool_names = {tool.name for tool in tools.tools}
+    coverage_content = coverage_resource.contents[0]
 
     assert "dotloop_get_account" in tool_names
+    assert isinstance(coverage_content, TextResourceContents)
+    assert "Dotloop MCP API Coverage Matrix" in coverage_content.text
     assert result.structuredContent == {"result": {"data": {"id": 1, "firstName": "Ada"}}}
 
 
@@ -255,11 +261,17 @@ async def test_streamable_http_client_can_list_and_call_representative_tool() ->
             async with ClientSession(read_stream, write_stream) as session:
                 await session.initialize()
                 tools = await session.list_tools()
+                method_coverage_resource = await session.read_resource(
+                    AnyUrl(METHOD_COVERAGE_RESOURCE_URI)
+                )
                 result = await session.call_tool("dotloop_get_account", {})
 
         tool_names = {tool.name for tool in tools.tools}
+        method_coverage_content = method_coverage_resource.contents[0]
 
         assert "dotloop_get_account" in tool_names
+        assert isinstance(method_coverage_content, TextResourceContents)
+        assert "Dotloop Library Method Coverage" in method_coverage_content.text
         assert result.structuredContent == {"result": {"data": {"id": 1, "firstName": "Ada"}}}
     finally:
         process.terminate()
