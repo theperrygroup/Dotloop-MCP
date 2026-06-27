@@ -59,6 +59,17 @@ EXPECTED_TOOLS = {
     "dotloop_get_default_templates",
     "dotloop_get_custom_templates",
 }
+WRITE_TOOL_VERBS = {
+    "add",
+    "archive",
+    "create",
+    "delete",
+    "remove",
+    "revoke",
+    "send",
+    "update",
+    "upload",
+}
 
 TOOL_CALLS: tuple[tuple[str, dict[str, object]], ...] = (
     ("dotloop_get_account", {}),
@@ -163,7 +174,12 @@ async def test_registered_tools_and_resource() -> None:
     method_resource_contents = list(await server.read_resource(METHOD_COVERAGE_RESOURCE_URI))
     resource_uris = {str(resource.uri) for resource in resources}
 
-    assert EXPECTED_TOOLS.issubset(tools)
+    assert set(tools) == EXPECTED_TOOLS
+    assert not {
+        tool_name
+        for tool_name in tools
+        if any(f"_{verb}_" in tool_name for verb in WRITE_TOOL_VERBS)
+    }
     assert {COVERAGE_RESOURCE_URI, METHOD_COVERAGE_RESOURCE_URI}.issubset(resource_uris)
     assert "Dotloop MCP API Coverage Matrix" in resource_contents[0].content
     assert "Dotloop Library Method Coverage" in method_resource_contents[0].content
