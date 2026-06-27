@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import base64
 import logging
+import os
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
@@ -32,6 +34,14 @@ from dotloop_mcp.models.common import DownloadDocumentRequest, to_json_object, t
 from dotloop_mcp.services import DotloopService
 
 
+@pytest.fixture(autouse=True)
+def _isolate_dotloop_env_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.chdir(tmp_path)
+    for name in tuple(os.environ):
+        if name.startswith("DOTLOOP_"):
+            monkeypatch.delenv(name, raising=False)
+
+
 def test_dotloop_settings_loads_primary_token(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DOTLOOP_ACCESS_TOKEN", "token-value")
     monkeypatch.setenv("DOTLOOP_BASE_URL", "https://example.test/v2")
@@ -42,6 +52,44 @@ def test_dotloop_settings_loads_primary_token(monkeypatch: pytest.MonkeyPatch) -
     assert settings.access_token == "token-value"
     assert settings.base_url == "https://example.test/v2"
     assert settings.timeout == 12
+
+
+def test_dotloop_settings_loads_local_env_file(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.delenv("DOTLOOP_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("DOTLOOP_API_KEY", raising=False)
+    (tmp_path / ".env").write_text(
+        "\n".join(
+            [
+                "DOTLOOP_ACCESS_TOKEN=env-file-token",
+                "DOTLOOP_BASE_URL=https://env-file.test/public/v2",
+                "DOTLOOP_TIMEOUT_SECONDS=18",
+                "UNRELATED_SECRET=not-loaded",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    settings = DotloopSettings.from_env()
+
+    assert settings.access_token == "env-file-token"
+    assert settings.base_url == "https://env-file.test/public/v2"
+    assert settings.timeout == 18
+    assert "UNRELATED_SECRET" not in os.environ
+
+
+def test_dotloop_settings_keeps_exported_values_over_env_file(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("DOTLOOP_ACCESS_TOKEN", "exported-token")
+    (tmp_path / ".env").write_text("DOTLOOP_ACCESS_TOKEN=env-file-token\n", encoding="utf-8")
+
+    settings = DotloopSettings.from_env()
+
+    assert settings.access_token == "exported-token"
 
 
 def test_dotloop_settings_loads_legacy_api_key(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -35,7 +35,10 @@ The legacy `DOTLOOP_API_KEY` variable is also accepted because the underlying
 `dotloop` package uses that name.
 
 Use `.env.example` for the supported non-secret variable names. Keep real
-values in your shell or a local ignored `.env` file.
+values in your shell or a local ignored `.env` file. The server and live
+readiness check load `DOTLOOP_*` values from `.env` in the current working
+directory when those variables are not already exported. Set `DOTLOOP_ENV_FILE`
+to point at a different local env file.
 
 ## Run
 

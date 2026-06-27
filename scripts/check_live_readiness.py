@@ -6,6 +6,9 @@ import argparse
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
+
+from dotloop_mcp.config import load_dotloop_env_file
 
 
 @dataclass(frozen=True)
@@ -28,8 +31,9 @@ class LiveReadiness:
         return self.account_ready and self.profile_id_present and self.loop_id_present
 
 
-def get_live_readiness() -> LiveReadiness:
+def get_live_readiness(env_file: str | Path | None = None) -> LiveReadiness:
     """Read live-readiness state without exposing secret values."""
+    load_dotloop_env_file(env_file)
     return LiveReadiness(
         run_flag_enabled=os.getenv("DOTLOOP_RUN_LIVE_TESTS") == "1",
         token_present=bool(os.getenv("DOTLOOP_ACCESS_TOKEN") or os.getenv("DOTLOOP_API_KEY")),
@@ -46,13 +50,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Exit nonzero when account-level live reads are not ready.",
     )
+    parser.add_argument(
+        "--env-file",
+        default=None,
+        help="Optional DOTLOOP_* env file path. Defaults to .env or DOTLOOP_ENV_FILE.",
+    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Print live-readiness status without printing credentials."""
     args = build_parser().parse_args(argv)
-    readiness = get_live_readiness()
+    readiness = get_live_readiness(args.env_file)
     status = "ready" if readiness.account_ready else "blocked"
 
     print(f"Live Dotloop read readiness: {status}")
