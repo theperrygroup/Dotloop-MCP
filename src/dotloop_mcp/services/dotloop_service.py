@@ -233,6 +233,24 @@ class DotloopService:
             lambda: self._client.task.get_task_summary(profile_id, loop_id)
         )
 
+    async def get_all_tasks_in_loop(self, profile_id: int, loop_id: int) -> JsonObject:
+        """Get all tasks in a loop."""
+        return await self._call_json(
+            lambda: self._client.task.get_all_tasks_in_loop(profile_id, loop_id)
+        )
+
+    async def get_pending_tasks(self, profile_id: int, loop_id: int) -> JsonObject:
+        """Get pending tasks in a loop."""
+        return await self._call_json(
+            lambda: self._client.task.get_pending_tasks(profile_id, loop_id)
+        )
+
+    async def get_completed_tasks(self, profile_id: int, loop_id: int) -> JsonObject:
+        """Get completed tasks in a loop."""
+        return await self._call_json(
+            lambda: self._client.task.get_completed_tasks(profile_id, loop_id)
+        )
+
     async def list_loop_activity(
         self,
         profile_id: int,
@@ -265,6 +283,42 @@ class DotloopService:
             lambda: self._client.activity.get_activity_summary(profile_id, loop_id)
         )
 
+    async def get_activity_by_type(
+        self,
+        profile_id: int,
+        loop_id: int,
+        activity_type: str,
+        *,
+        batch_size: int | None = None,
+    ) -> JsonObject:
+        """Get loop activity filtered by type."""
+        return await self._call_json(
+            lambda: self._client.activity.get_activity_by_type(
+                profile_id,
+                loop_id,
+                activity_type,
+                batch_size=batch_size,
+            )
+        )
+
+    async def get_activity_by_user(
+        self,
+        profile_id: int,
+        loop_id: int,
+        user_name: str,
+        *,
+        batch_size: int | None = None,
+    ) -> JsonObject:
+        """Get loop activity filtered by user."""
+        return await self._call_json(
+            lambda: self._client.activity.get_activity_by_user(
+                profile_id,
+                loop_id,
+                user_name,
+                batch_size=batch_size,
+            )
+        )
+
     async def list_loop_templates(self, profile_id: int) -> JsonObject:
         """List loop templates for a profile."""
         return await self._call_json(lambda: self._client.template.list_loop_templates(profile_id))
@@ -294,3 +348,19 @@ class DotloopService:
     async def get_template_summary(self, profile_id: int) -> JsonObject:
         """Get template summary for a profile."""
         return await self._call_json(lambda: self._client.template.get_template_summary(profile_id))
+
+    async def get_templates_by_type(self, profile_id: int, template_type: str) -> JsonObject:
+        """Get templates by type."""
+        return await self._call_json(
+            lambda: self._client.template.get_templates_by_type(profile_id, template_type)
+        )
+
+    async def get_default_templates(self, profile_id: int) -> JsonObject:
+        """Get default templates."""
+        return await self._call_json(
+            lambda: self._client.template.get_default_templates(profile_id)
+        )
+
+    async def get_custom_templates(self, profile_id: int) -> JsonObject:
+        """Get custom templates."""
+        return await self._call_json(lambda: self._client.template.get_custom_templates(profile_id))

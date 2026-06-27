@@ -62,11 +62,31 @@ class RecentActivityToolInput(ProfileLoopRequest):
     limit: int = Field(default=10, gt=0, le=100)
 
 
+class ActivityByTypeToolInput(ProfileLoopRequest):
+    """Input for activity type filtering."""
+
+    activity_type: str = Field(min_length=1)
+    batch_size: int | None = Field(default=None, gt=0, le=500)
+
+
+class ActivityByUserToolInput(ProfileLoopRequest):
+    """Input for activity user filtering."""
+
+    user_name: str = Field(min_length=1)
+    batch_size: int | None = Field(default=None, gt=0, le=500)
+
+
 class FindTemplateToolInput(ProfileIdRequest):
     """Input for template name lookup."""
 
     template_name: str = Field(min_length=1)
     exact_match: bool = True
+
+
+class TemplateTypeToolInput(ProfileIdRequest):
+    """Input for template type filtering."""
+
+    template_type: str = Field(min_length=1)
 
 
 class DotloopToolAdapter:
@@ -201,6 +221,18 @@ class DotloopToolAdapter:
         """Get loop task summary."""
         return await self._service.get_task_summary(request.profile_id, request.loop_id)
 
+    async def get_all_tasks_in_loop(self, request: ProfileLoopRequest) -> JsonObject:
+        """Get all tasks in a loop."""
+        return await self._service.get_all_tasks_in_loop(request.profile_id, request.loop_id)
+
+    async def get_pending_tasks(self, request: ProfileLoopRequest) -> JsonObject:
+        """Get pending tasks in a loop."""
+        return await self._service.get_pending_tasks(request.profile_id, request.loop_id)
+
+    async def get_completed_tasks(self, request: ProfileLoopRequest) -> JsonObject:
+        """Get completed tasks in a loop."""
+        return await self._service.get_completed_tasks(request.profile_id, request.loop_id)
+
     async def list_loop_activity(self, request: ListActivityToolInput) -> JsonObject:
         """List loop activity."""
         return await self._service.list_loop_activity(
@@ -222,6 +254,24 @@ class DotloopToolAdapter:
         """Get loop activity summary."""
         return await self._service.get_activity_summary(request.profile_id, request.loop_id)
 
+    async def get_activity_by_type(self, request: ActivityByTypeToolInput) -> JsonObject:
+        """Get loop activity by type."""
+        return await self._service.get_activity_by_type(
+            request.profile_id,
+            request.loop_id,
+            request.activity_type,
+            batch_size=request.batch_size,
+        )
+
+    async def get_activity_by_user(self, request: ActivityByUserToolInput) -> JsonObject:
+        """Get loop activity by user."""
+        return await self._service.get_activity_by_user(
+            request.profile_id,
+            request.loop_id,
+            request.user_name,
+            batch_size=request.batch_size,
+        )
+
     async def list_loop_templates(self, request: ProfileIdRequest) -> JsonObject:
         """List loop templates."""
         return await self._service.list_loop_templates(request.profile_id)
@@ -241,6 +291,21 @@ class DotloopToolAdapter:
     async def get_template_summary(self, request: ProfileIdRequest) -> JsonObject:
         """Get template summary."""
         return await self._service.get_template_summary(request.profile_id)
+
+    async def get_templates_by_type(self, request: TemplateTypeToolInput) -> JsonObject:
+        """Get templates by type."""
+        return await self._service.get_templates_by_type(
+            request.profile_id,
+            request.template_type,
+        )
+
+    async def get_default_templates(self, request: ProfileIdRequest) -> JsonObject:
+        """Get default templates."""
+        return await self._service.get_default_templates(request.profile_id)
+
+    async def get_custom_templates(self, request: ProfileIdRequest) -> JsonObject:
+        """Get custom templates."""
+        return await self._service.get_custom_templates(request.profile_id)
 
 
 def validate_request[ModelT: StrictRequestModel](

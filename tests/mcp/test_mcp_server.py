@@ -41,13 +41,21 @@ EXPECTED_TOOLS = {
     "dotloop_list_tasks",
     "dotloop_get_task",
     "dotloop_get_task_summary",
+    "dotloop_get_all_tasks_in_loop",
+    "dotloop_get_pending_tasks",
+    "dotloop_get_completed_tasks",
     "dotloop_list_loop_activity",
     "dotloop_get_recent_activity",
     "dotloop_get_activity_summary",
+    "dotloop_get_activity_by_type",
+    "dotloop_get_activity_by_user",
     "dotloop_list_loop_templates",
     "dotloop_get_loop_template",
     "dotloop_find_template_by_name",
     "dotloop_get_template_summary",
+    "dotloop_get_templates_by_type",
+    "dotloop_get_default_templates",
+    "dotloop_get_custom_templates",
 }
 
 TOOL_CALLS: tuple[tuple[str, dict[str, object]], ...] = (
@@ -78,13 +86,27 @@ TOOL_CALLS: tuple[tuple[str, dict[str, object]], ...] = (
     ("dotloop_list_tasks", {"profile_id": 10, "loop_id": 20, "tasklist_id": 60}),
     ("dotloop_get_task", {"profile_id": 10, "loop_id": 20, "tasklist_id": 60, "task_id": 70}),
     ("dotloop_get_task_summary", {"profile_id": 10, "loop_id": 20}),
+    ("dotloop_get_all_tasks_in_loop", {"profile_id": 10, "loop_id": 20}),
+    ("dotloop_get_pending_tasks", {"profile_id": 10, "loop_id": 20}),
+    ("dotloop_get_completed_tasks", {"profile_id": 10, "loop_id": 20}),
     ("dotloop_list_loop_activity", {"profile_id": 10, "loop_id": 20, "batch_size": 10}),
     ("dotloop_get_recent_activity", {"profile_id": 10, "loop_id": 20, "limit": 5}),
     ("dotloop_get_activity_summary", {"profile_id": 10, "loop_id": 20}),
+    (
+        "dotloop_get_activity_by_type",
+        {"profile_id": 10, "loop_id": 20, "activity_type": "Document", "batch_size": 10},
+    ),
+    (
+        "dotloop_get_activity_by_user",
+        {"profile_id": 10, "loop_id": 20, "user_name": "Ada", "batch_size": 10},
+    ),
     ("dotloop_list_loop_templates", {"profile_id": 10}),
     ("dotloop_get_loop_template", {"profile_id": 10, "template_id": 80}),
     ("dotloop_find_template_by_name", {"profile_id": 10, "template_name": "Buyer"}),
     ("dotloop_get_template_summary", {"profile_id": 10}),
+    ("dotloop_get_templates_by_type", {"profile_id": 10, "template_type": "default"}),
+    ("dotloop_get_default_templates", {"profile_id": 10}),
+    ("dotloop_get_custom_templates", {"profile_id": 10}),
 )
 
 

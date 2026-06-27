@@ -11,6 +11,8 @@ from dotloop_mcp.coverage import (
     METHOD_COVERAGE_RESOURCE_URI,
 )
 from dotloop_mcp.mcp_tools import (
+    ActivityByTypeToolInput,
+    ActivityByUserToolInput,
     DotloopToolAdapter,
     FindTemplateToolInput,
     GetFolderToolInput,
@@ -19,6 +21,7 @@ from dotloop_mcp.mcp_tools import (
     ListFoldersToolInput,
     ListLoopsToolInput,
     RecentActivityToolInput,
+    TemplateTypeToolInput,
     validate_request,
 )
 from dotloop_mcp.models.common import (
@@ -207,6 +210,24 @@ def _register_task_tools(mcp: FastMCP, adapter: DotloopToolAdapter) -> None:
         request = validate_request(ProfileLoopRequest, locals())
         return await adapter.get_task_summary(request)
 
+    @mcp.tool(name="dotloop_get_all_tasks_in_loop", description="Get all tasks in a Dotloop loop.")
+    async def dotloop_get_all_tasks_in_loop(profile_id: int, loop_id: int) -> JsonObject:
+        request = validate_request(ProfileLoopRequest, locals())
+        return await adapter.get_all_tasks_in_loop(request)
+
+    @mcp.tool(name="dotloop_get_pending_tasks", description="Get pending tasks in a Dotloop loop.")
+    async def dotloop_get_pending_tasks(profile_id: int, loop_id: int) -> JsonObject:
+        request = validate_request(ProfileLoopRequest, locals())
+        return await adapter.get_pending_tasks(request)
+
+    @mcp.tool(
+        name="dotloop_get_completed_tasks",
+        description="Get completed tasks in a Dotloop loop.",
+    )
+    async def dotloop_get_completed_tasks(profile_id: int, loop_id: int) -> JsonObject:
+        request = validate_request(ProfileLoopRequest, locals())
+        return await adapter.get_completed_tasks(request)
+
 
 def _register_activity_tools(mcp: FastMCP, adapter: DotloopToolAdapter) -> None:
     @mcp.tool(name="dotloop_list_loop_activity", description="List Dotloop loop activity.")
@@ -232,6 +253,32 @@ def _register_activity_tools(mcp: FastMCP, adapter: DotloopToolAdapter) -> None:
     async def dotloop_get_activity_summary(profile_id: int, loop_id: int) -> JsonObject:
         request = validate_request(ProfileLoopRequest, locals())
         return await adapter.get_activity_summary(request)
+
+    @mcp.tool(
+        name="dotloop_get_activity_by_type",
+        description="Get Dotloop loop activity filtered by type.",
+    )
+    async def dotloop_get_activity_by_type(
+        profile_id: int,
+        loop_id: int,
+        activity_type: str,
+        batch_size: int | None = None,
+    ) -> JsonObject:
+        request = validate_request(ActivityByTypeToolInput, locals())
+        return await adapter.get_activity_by_type(request)
+
+    @mcp.tool(
+        name="dotloop_get_activity_by_user",
+        description="Get Dotloop loop activity filtered by user.",
+    )
+    async def dotloop_get_activity_by_user(
+        profile_id: int,
+        loop_id: int,
+        user_name: str,
+        batch_size: int | None = None,
+    ) -> JsonObject:
+        request = validate_request(ActivityByUserToolInput, locals())
+        return await adapter.get_activity_by_user(request)
 
 
 def _register_template_tools(mcp: FastMCP, adapter: DotloopToolAdapter) -> None:
@@ -261,6 +308,21 @@ def _register_template_tools(mcp: FastMCP, adapter: DotloopToolAdapter) -> None:
     async def dotloop_get_template_summary(profile_id: int) -> JsonObject:
         request = validate_request(ProfileIdRequest, locals())
         return await adapter.get_template_summary(request)
+
+    @mcp.tool(name="dotloop_get_templates_by_type", description="Get Dotloop templates by type.")
+    async def dotloop_get_templates_by_type(profile_id: int, template_type: str) -> JsonObject:
+        request = validate_request(TemplateTypeToolInput, locals())
+        return await adapter.get_templates_by_type(request)
+
+    @mcp.tool(name="dotloop_get_default_templates", description="Get default Dotloop templates.")
+    async def dotloop_get_default_templates(profile_id: int) -> JsonObject:
+        request = validate_request(ProfileIdRequest, locals())
+        return await adapter.get_default_templates(request)
+
+    @mcp.tool(name="dotloop_get_custom_templates", description="Get custom Dotloop templates.")
+    async def dotloop_get_custom_templates(profile_id: int) -> JsonObject:
+        request = validate_request(ProfileIdRequest, locals())
+        return await adapter.get_custom_templates(request)
 
 
 def _register_resources(mcp: FastMCP, *, project_root: Path) -> None:

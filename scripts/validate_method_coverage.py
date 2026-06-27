@@ -30,7 +30,7 @@ _CLIENT_DOMAINS = (
 def _public_domain_methods(domain_client: object) -> list[str]:
     """Return named public domain methods, excluding generic HTTP helpers."""
     methods: list[str] = []
-    for method_name, member in inspect.getmembers(domain_client, predicate=callable):
+    for method_name, _member in inspect.getmembers(domain_client, predicate=callable):
         if method_name.startswith("_") or method_name in _GENERIC_HTTP_METHODS:
             continue
         methods.append(method_name)
@@ -67,7 +67,9 @@ def main() -> int:
         return 1
 
     doc_text = _DOC_PATH.read_text()
-    missing = [method_token for method_token in _expected_method_tokens() if method_token not in doc_text]
+    missing = [
+        method_token for method_token in _expected_method_tokens() if method_token not in doc_text
+    ]
     if missing:
         print("Method coverage doc is missing package methods:")
         for method_token in missing:

@@ -167,6 +167,15 @@ class TaskFake:
     def get_task_summary(self, profile_id: int, loop_id: int) -> dict[str, Any]:
         return {"data": {"profileId": profile_id, "loopId": loop_id, "pending": 1, "completed": 2}}
 
+    def get_all_tasks_in_loop(self, profile_id: int, loop_id: int) -> dict[str, Any]:
+        return {"data": [{"profileId": profile_id, "loopId": loop_id, "scope": "all"}]}
+
+    def get_pending_tasks(self, profile_id: int, loop_id: int) -> dict[str, Any]:
+        return {"data": [{"profileId": profile_id, "loopId": loop_id, "status": "pending"}]}
+
+    def get_completed_tasks(self, profile_id: int, loop_id: int) -> dict[str, Any]:
+        return {"data": [{"profileId": profile_id, "loopId": loop_id, "status": "completed"}]}
+
 
 class ActivityFake:
     def list_loop_activity(
@@ -193,6 +202,42 @@ class ActivityFake:
     def get_activity_summary(self, profile_id: int, loop_id: int) -> dict[str, Any]:
         return {"data": {"profileId": profile_id, "loopId": loop_id, "count": 1}}
 
+    def get_activity_by_type(
+        self,
+        profile_id: int,
+        loop_id: int,
+        activity_type: str,
+        batch_size: int | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "data": [
+                {
+                    "profileId": profile_id,
+                    "loopId": loop_id,
+                    "activityType": activity_type,
+                    "batchSize": batch_size,
+                }
+            ]
+        }
+
+    def get_activity_by_user(
+        self,
+        profile_id: int,
+        loop_id: int,
+        user_name: str,
+        batch_size: int | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "data": [
+                {
+                    "profileId": profile_id,
+                    "loopId": loop_id,
+                    "userName": user_name,
+                    "batchSize": batch_size,
+                }
+            ]
+        }
+
 
 class TemplateFake:
     def list_loop_templates(self, profile_id: int) -> dict[str, Any]:
@@ -218,6 +263,15 @@ class TemplateFake:
 
     def get_template_summary(self, profile_id: int) -> dict[str, Any]:
         return {"data": {"profileId": profile_id, "templates": 1}}
+
+    def get_templates_by_type(self, profile_id: int, template_type: str) -> dict[str, Any]:
+        return {"data": [{"profileId": profile_id, "templateType": template_type}]}
+
+    def get_default_templates(self, profile_id: int) -> dict[str, Any]:
+        return {"data": [{"profileId": profile_id, "templateScope": "default"}]}
+
+    def get_custom_templates(self, profile_id: int) -> dict[str, Any]:
+        return {"data": [{"profileId": profile_id, "templateScope": "custom"}]}
 
 
 @dataclass
