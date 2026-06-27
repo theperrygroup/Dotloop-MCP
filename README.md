@@ -7,6 +7,16 @@ exposes safe read tools for account, profiles, loops, loop details, folders,
 documents, participants, tasks, activity, and templates. State-changing tools
 remain deferred by the planning docs under `docs/planning/dotloop-mcp-buildout/`.
 
+## MCP resources
+
+- `dotloop://api-coverage-matrix`: domain-level library and MCP exposure status.
+- `dotloop://library-method-coverage`: method-level `dotloop==1.3.2` coverage
+  generated from the installed package surface.
+
+The local `docs/` tree is intentionally ignored by this repo. Runtime coverage
+resources and `make validate` are self-contained for clean checkouts without
+local planning docs.
+
 ## Install
 
 ```bash
