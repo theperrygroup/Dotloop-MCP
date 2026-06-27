@@ -57,5 +57,5 @@ Live checks are disabled by default and require explicit opt-in:
 
 ```bash
 make live-readiness-check
-DOTLOOP_RUN_LIVE_TESTS=1 make live-identity-check
+make live-read-check
 ```

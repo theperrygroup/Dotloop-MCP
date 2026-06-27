@@ -39,6 +39,9 @@ def test_live_readiness_reports_blocked_without_secret_env(
     output = capsys.readouterr().out
     assert "blocked" in output
     assert "missing" in output
+    assert "Profile-specific read inputs: missing" in output
+    assert "Loop-specific read inputs: missing" in output
+    assert "Document metadata read inputs: missing" in output
 
 
 def test_live_readiness_reads_env_file_without_printing_token(
@@ -54,6 +57,9 @@ def test_live_readiness_reads_env_file_without_printing_token(
             [
                 "DOTLOOP_RUN_LIVE_TESTS=1",
                 "DOTLOOP_ACCESS_TOKEN=secret-token-value",
+                "DOTLOOP_LIVE_PROFILE_ID=10",
+                "DOTLOOP_LIVE_LOOP_ID=20",
+                "DOTLOOP_LIVE_DOCUMENT_ID=30",
             ]
         ),
         encoding="utf-8",
@@ -64,6 +70,9 @@ def test_live_readiness_reads_env_file_without_printing_token(
     output = capsys.readouterr().out
     assert "Live Dotloop read readiness: ready" in output
     assert "Dotloop token environment: present" in output
+    assert "Profile-specific read inputs: present" in output
+    assert "Loop-specific read inputs: present" in output
+    assert "Document metadata read inputs: present" in output
     assert "secret-token-value" not in output
 
 
@@ -87,4 +96,5 @@ def test_live_readiness_reports_ready_without_printing_token(
 
     output = capsys.readouterr().out
     assert "ready" in output
+    assert "Profile-specific read inputs: missing" in output
     assert "secret-token-value" not in output

@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help sync docs-check format-check lint typecheck test coverage cli-help live-readiness-check live-identity-check validate
+.PHONY: help sync docs-check format-check lint typecheck test coverage cli-help live-readiness-check live-read-check live-identity-check validate
 
 help:
 	@printf "%s\n" \
@@ -13,7 +13,8 @@ help:
 		"make coverage         Run branch coverage" \
 		"make cli-help         Check the CLI entrypoint" \
 		"make live-readiness-check Report non-secret live read readiness" \
-		"make live-identity-check Run optional live account smoke check" \
+		"make live-read-check  Run optional live read smoke checks" \
+		"make live-identity-check Alias for live-read-check" \
 		"make validate         Run the local validation stack"
 
 sync:
@@ -45,8 +46,10 @@ cli-help:
 live-readiness-check:
 	uv run python scripts/check_live_readiness.py
 
-live-identity-check:
+live-read-check:
 	DOTLOOP_RUN_LIVE_TESTS=1 uv run pytest tests/live -m live
+
+live-identity-check: live-read-check
 
 validate:
 	$(MAKE) sync
