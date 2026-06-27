@@ -47,6 +47,7 @@ live-readiness-check:
 	uv run python scripts/check_live_readiness.py
 
 live-read-check:
+	DOTLOOP_RUN_LIVE_TESTS=1 uv run python scripts/check_live_readiness.py --require-ready
 	DOTLOOP_RUN_LIVE_TESTS=1 uv run pytest tests/live -m live
 
 live-identity-check: live-read-check
