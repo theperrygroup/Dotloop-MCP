@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import logging
 import os
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, cast
 
@@ -35,11 +36,19 @@ from dotloop_mcp.services import DotloopService
 
 
 @pytest.fixture(autouse=True)
-def _isolate_dotloop_env_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def _isolate_dotloop_env_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[None]:
+    original_dotloop_env = {
+        name: value for name, value in os.environ.items() if name.startswith("DOTLOOP_")
+    }
     monkeypatch.chdir(tmp_path)
     for name in tuple(os.environ):
         if name.startswith("DOTLOOP_"):
-            monkeypatch.delenv(name, raising=False)
+            del os.environ[name]
+    yield
+    for name in tuple(os.environ):
+        if name.startswith("DOTLOOP_"):
+            del os.environ[name]
+    os.environ.update(original_dotloop_env)
 
 
 def test_dotloop_settings_loads_primary_token(monkeypatch: pytest.MonkeyPatch) -> None:
