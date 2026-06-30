@@ -31,7 +31,7 @@ Before registering the task definition, replace:
 | `__AWS_REGION__` | AWS region, such as `us-west-1`. |
 | `__DOTLOOP_API_CLIENT_ID_SECRET_ARN__` | Secrets Manager ARN whose secret string is the Dotloop app client id. |
 | `__DOTLOOP_API_SECRET_SECRET_ARN__` | Secrets Manager ARN whose secret string is the Dotloop app client secret. |
-| `__DOTLOOP_APP_OAUTH_REDIRECT_URL__` | Dotloop OAuth callback URL, normally `https://dotloop.theperry.group/oauth/dotloop/callback`. |
+| `__DOTLOOP_APP_OAUTH_REDIRECT_URL__` | Dotloop OAuth callback URL registered with the Dotloop developer app, normally `https://tpgstats.com/agents/dotloop/callback` for the Perry Group hosted deployment. |
 | `__DOTLOOP_APP_OAUTH_TOKEN_SECRET_ARN__` | Secrets Manager ARN for the refreshable Dotloop token-state JSON store. |
 | `__DOTLOOP_BATTLE_FIXTURE_MODE__` | Optional fixture-mode switch for AI battle tests; defaults to `0`. |
 | `__DOTLOOP_BATTLE_RECORD_PATH__` | Optional JSONL call-log path for fixture-mode battle tests. |
@@ -50,15 +50,18 @@ Dotloop app OAuth as the consent boundary for live Dotloop API access:
 
 ```text
 DOTLOOP_APP_OAUTH_ENABLED=1
-DOTLOOP_APP_OAUTH_REDIRECT_URL=https://dotloop.theperry.group/oauth/dotloop/callback
+DOTLOOP_APP_OAUTH_REDIRECT_URL=https://tpgstats.com/agents/dotloop/callback
 DOTLOOP_MCP_HOSTED_OAUTH_ENABLED=1
 DOTLOOP_MCP_HOSTED_OAUTH_PUBLIC_CONSENT_ENABLED=0
 DOTLOOP_MCP_AUTH_JWKS_URL=https://dotloop.theperry.group/.well-known/jwks.json
 ```
 
-The Dotloop app must allow `https://dotloop.theperry.group/oauth/dotloop/callback`
-as a redirect URI. The refreshable token-state secret starts empty and is
-populated after a browser completes the first connector authorization.
+The Dotloop app must allow `https://tpgstats.com/agents/dotloop/callback` as a
+redirect URI. The Perry Group Django app relays MCP-prefixed callback states
+to `https://dotloop.theperry.group/oauth/dotloop/callback`; normal Django
+Dotloop authorization states continue through the website flow. The refreshable
+token-state secret starts empty and is populated after a browser completes the
+first connector authorization.
 
 ## Hosted Battle Testing
 
@@ -90,7 +93,7 @@ Configure a GitHub Actions environment named `staging` with these variables:
 - `ECS_SUBNET_IDS` (comma-separated subnet IDs)
 - `ECS_TARGET_GROUP_ARN`
 - `LOG_GROUP_NAME`
-- `DOTLOOP_APP_OAUTH_REDIRECT_URL` (optional; defaults to `https://dotloop.theperry.group/oauth/dotloop/callback`)
+- `DOTLOOP_APP_OAUTH_REDIRECT_URL` (optional; defaults to `https://tpgstats.com/agents/dotloop/callback`)
 - `DOTLOOP_BATTLE_FIXTURE_MODE` (optional; defaults to `0`)
 - `DOTLOOP_BATTLE_RECORD_PATH` (optional; defaults to `/tmp/ai-battle/staging/mcp_calls.jsonl`)
 - `MCP_AUTH_ISSUER_URL`

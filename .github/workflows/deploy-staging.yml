@@ -34,7 +34,7 @@ jobs:
       MCP_AUTH_JWKS_URL: ${{ vars.MCP_AUTH_JWKS_URL }}
       MCP_AUTH_REQUIRED_SCOPES: ${{ vars.MCP_AUTH_REQUIRED_SCOPES || 'dotloop:read' }}
       MCP_AUTH_RESOURCE_SERVER_URL: ${{ vars.MCP_AUTH_RESOURCE_SERVER_URL }}
-      DOTLOOP_APP_OAUTH_REDIRECT_URL: ${{ vars.DOTLOOP_APP_OAUTH_REDIRECT_URL || 'https://dotloop.theperry.group/oauth/dotloop/callback' }}
+      DOTLOOP_APP_OAUTH_REDIRECT_URL: ${{ vars.DOTLOOP_APP_OAUTH_REDIRECT_URL || 'https://tpgstats.com/agents/dotloop/callback' }}
       DOTLOOP_BATTLE_FIXTURE_MODE: ${{ vars.DOTLOOP_BATTLE_FIXTURE_MODE || '0' }}
       DOTLOOP_BATTLE_RECORD_PATH: ${{ vars.DOTLOOP_BATTLE_RECORD_PATH || '/tmp/ai-battle/staging/mcp_calls.jsonl' }}
       AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
@@ -126,7 +126,7 @@ jobs:
       MCP_AUTH_JWKS_URL: ${{ vars.MCP_AUTH_JWKS_URL }}
       MCP_AUTH_REQUIRED_SCOPES: ${{ vars.MCP_AUTH_REQUIRED_SCOPES || 'dotloop:read' }}
       MCP_AUTH_RESOURCE_SERVER_URL: ${{ vars.MCP_AUTH_RESOURCE_SERVER_URL }}
-      DOTLOOP_APP_OAUTH_REDIRECT_URL: ${{ vars.DOTLOOP_APP_OAUTH_REDIRECT_URL || 'https://dotloop.theperry.group/oauth/dotloop/callback' }}
+      DOTLOOP_APP_OAUTH_REDIRECT_URL: ${{ vars.DOTLOOP_APP_OAUTH_REDIRECT_URL || 'https://tpgstats.com/agents/dotloop/callback' }}
       DOTLOOP_BATTLE_FIXTURE_MODE: ${{ vars.DOTLOOP_BATTLE_FIXTURE_MODE || '0' }}
       DOTLOOP_BATTLE_RECORD_PATH: ${{ vars.DOTLOOP_BATTLE_RECORD_PATH || '/tmp/ai-battle/staging/mcp_calls.jsonl' }}
       AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}

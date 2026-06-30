@@ -240,7 +240,7 @@ async def test_hosted_oauth_redirects_to_dotloop_when_api_token_missing() -> Non
     assert parsed_redirect.path == "/oauth/authorize"
     assert query["client_id"] == ["dotloop-client-id"]
     assert query["redirect_uri"] == ["http://127.0.0.1:8000/oauth/dotloop/callback"]
-    assert query["state"][0]
+    assert query["state"][0].startswith("dotloop_mcp_")
 
 
 @pytest.mark.asyncio
@@ -286,6 +286,7 @@ async def test_hosted_oauth_dotloop_callback_resumes_mcp_authorization() -> None
             follow_redirects=False,
         )
         dotloop_state = parse_qs(urlsplit(authorize_response.headers["location"]).query)["state"][0]
+        assert dotloop_state.startswith("dotloop_mcp_")
 
         callback_response = await client.get(
             "/oauth/dotloop/callback",

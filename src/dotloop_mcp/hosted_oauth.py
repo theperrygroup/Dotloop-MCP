@@ -33,6 +33,7 @@ from dotloop_mcp.config import (
 
 _SUPPORTED_CODE_CHALLENGE_METHODS = {"plain", "S256"}
 _DEFAULT_SUBJECT = "dotloop-hosted-user"
+_DOTLOOP_MCP_STATE_PREFIX = "dotloop_mcp_"
 
 
 @dataclass(frozen=True)
@@ -334,7 +335,7 @@ class DotloopHostedOAuthApplication:
         if self._dotloop_credential_provider is None:
             raise DotloopConfigurationError("Dotloop app OAuth is not enabled.")
 
-        dotloop_state = secrets.token_urlsafe(32)
+        dotloop_state = f"{_DOTLOOP_MCP_STATE_PREFIX}{secrets.token_urlsafe(32)}"
         self._pending_dotloop_authorizations[dotloop_state] = _PendingDotloopAuthorization(
             client_id=client_id,
             redirect_uri=redirect_uri,

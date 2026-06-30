@@ -108,7 +108,7 @@ export DOTLOOP_MCP_HOSTED_OAUTH_PUBLIC_CONSENT_ENABLED=0
 export DOTLOOP_APP_OAUTH_ENABLED=1
 export DOTLOOP_API_CLIENT_ID="..."
 export DOTLOOP_API_SECRET="..."
-export DOTLOOP_APP_OAUTH_REDIRECT_URL="https://dotloop.theperry.group/oauth/dotloop/callback"
+export DOTLOOP_APP_OAUTH_REDIRECT_URL="https://tpgstats.com/agents/dotloop/callback"
 export DOTLOOP_APP_OAUTH_TOKEN_SECRET_ARN="arn:aws:secretsmanager:..."
 ```
 
@@ -129,6 +129,10 @@ Dotloop token store before issuing an MCP authorization code. If no valid
 Dotloop API token is available, it redirects to Dotloop OAuth and resumes the
 original MCP PKCE flow after `/oauth/dotloop/callback` stores refreshable token
 state. The caller's MCP Bearer token is never passed through to Dotloop.
+For the hosted Perry Group deployment, Dotloop app authorization uses the
+registered `https://tpgstats.com/agents/dotloop/callback` redirect URI, and
+that Django callback relays MCP-prefixed OAuth states back to
+`https://dotloop.theperry.group/oauth/dotloop/callback`.
 
 ## Hosted Staging Deployment
 
@@ -154,7 +158,7 @@ DOTLOOP_MCP_AUTH_JWKS_URL=https://dotloop.theperry.group/.well-known/jwks.json
 DOTLOOP_MCP_HOSTED_OAUTH_ENABLED=1
 DOTLOOP_MCP_HOSTED_OAUTH_PUBLIC_CONSENT_ENABLED=0
 DOTLOOP_APP_OAUTH_ENABLED=1
-DOTLOOP_APP_OAUTH_REDIRECT_URL=https://dotloop.theperry.group/oauth/dotloop/callback
+DOTLOOP_APP_OAUTH_REDIRECT_URL=https://tpgstats.com/agents/dotloop/callback
 DOTLOOP_APP_OAUTH_TOKEN_SECRET_ARN=arn:aws:secretsmanager:...
 ```
 
