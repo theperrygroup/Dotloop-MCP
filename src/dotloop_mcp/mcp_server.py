@@ -9,14 +9,34 @@ from dotloop import DotloopClient
 
 from dotloop_mcp.auth import DotloopMcpJwtVerifier, build_mcp_auth_settings
 from dotloop_mcp.config import DotloopConfigurationError, DotloopServerSettings, DotloopSettings
+from dotloop_mcp.hosted_oauth import DotloopHostedOAuthApplication
 from dotloop_mcp.logging import configure_logging
 from dotloop_mcp.mcp_registration import register_server_surface
 from dotloop_mcp.mcp_tools import DotloopToolAdapter
 from dotloop_mcp.services import DotloopService, UnavailableDotloopService
 from mcp.server.auth.provider import TokenVerifier
 from mcp.server.fastmcp import FastMCP
+from starlette.applications import Starlette
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+class DotloopFastMCP(FastMCP):
+    """FastMCP subclass that mounts hosted OAuth issuer routes when configured."""
+
+    _hosted_oauth_application: DotloopHostedOAuthApplication | None = None
+
+    def streamable_http_app(self) -> Starlette:
+        """Return the streamable HTTP app with hosted OAuth routes mounted."""
+        app = super().streamable_http_app()
+        if self._hosted_oauth_application is None:
+            return app
+
+        existing_paths = {getattr(route, "path", None) for route in app.routes}
+        for route in self._hosted_oauth_application.routes():
+            if route.path not in existing_paths:
+                app.routes.append(route)
+        return app
 
 
 def create_server(
@@ -71,9 +91,17 @@ def create_server(
     mcp_auth = resolved_server_settings.mcp_auth
     auth_settings = build_mcp_auth_settings(mcp_auth) if mcp_auth.enabled else None
     resolved_token_verifier = None
+    hosted_oauth_application = None
     if mcp_auth.enabled:
-        resolved_token_verifier = token_verifier or DotloopMcpJwtVerifier(mcp_auth)
-    mcp = FastMCP(
+        if resolved_server_settings.hosted_oauth.enabled:
+            hosted_oauth_application = DotloopHostedOAuthApplication(
+                auth_settings=mcp_auth,
+                hosted_settings=resolved_server_settings.hosted_oauth,
+            )
+            resolved_token_verifier = token_verifier or hosted_oauth_application.token_verifier()
+        else:
+            resolved_token_verifier = token_verifier or DotloopMcpJwtVerifier(mcp_auth)
+    mcp = DotloopFastMCP(
         "Dotloop MCP",
         instructions=(
             "Use the Dotloop read tools for account, profile, loop, loop detail, folder, "
@@ -92,5 +120,6 @@ def create_server(
             resolved_server_settings.log_level,
         ),
     )
+    mcp._hosted_oauth_application = hosted_oauth_application
     register_server_surface(mcp, adapter, project_root=_PROJECT_ROOT)
     return mcp

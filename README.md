@@ -50,9 +50,9 @@ uv run python -m dotloop_mcp.cli streamable-http --host 127.0.0.1 --port 8000 --
 ## Authenticate the MCP URL
 
 Streamable HTTP can be protected as an MCP OAuth resource server. The server
-does not issue tokens; configure an external OAuth/OIDC issuer and JWKS URL,
-then clients must send `Authorization: Bearer <token>` on every MCP HTTP
-request. Tokens in URL query strings are not supported.
+can validate tokens from an external OAuth/OIDC issuer and JWKS URL, then
+clients must send `Authorization: Bearer <token>` on every MCP HTTP request.
+Tokens in URL query strings are not supported.
 
 ```bash
 export DOTLOOP_TRANSPORT=streamable-http
@@ -68,6 +68,30 @@ authenticate for. It is also used for protected-resource metadata discovery.
 Set `DOTLOOP_MCP_AUTH_AUDIENCE` only when the issuer uses a separate JWT
 audience value. Stdio transport is unchanged and should continue to load local
 credentials from the environment.
+
+Hosted staging can also expose built-in OAuth issuer endpoints for MCP clients
+that expect URL-based browser authentication:
+
+```bash
+export DOTLOOP_MCP_HOSTED_OAUTH_ENABLED=1
+export DOTLOOP_MCP_HOSTED_OAUTH_PUBLIC_CONSENT_ENABLED=1
+```
+
+That built-in issuer serves:
+
+```text
+/.well-known/oauth-authorization-server
+/.well-known/openid-configuration
+/.well-known/jwks.json
+/oauth/register
+/oauth/authorize
+/oauth/token
+```
+
+`DOTLOOP_MCP_HOSTED_OAUTH_PUBLIC_CONSENT_ENABLED=1` is a staging bridge for MCP
+URL compatibility while live Dotloop API credentials are not attached. Before a
+real Dotloop access token is added to hosted staging or production, replace that
+public consent bridge with a real login/consent boundary or disable it.
 
 ## Hosted Staging Deployment
 
@@ -89,7 +113,9 @@ DOTLOOP_STREAMABLE_HTTP_PATH=/mcp
 DOTLOOP_MCP_AUTH_ENABLED=1
 DOTLOOP_MCP_AUTH_ISSUER_URL=https://dotloop.theperry.group
 DOTLOOP_MCP_AUTH_RESOURCE_SERVER_URL=https://dotloop.theperry.group/mcp
-DOTLOOP_MCP_AUTH_JWKS_URL=https://auth.example.com/.well-known/jwks.json
+DOTLOOP_MCP_AUTH_JWKS_URL=https://dotloop.theperry.group/.well-known/jwks.json
+DOTLOOP_MCP_HOSTED_OAUTH_ENABLED=1
+DOTLOOP_MCP_HOSTED_OAUTH_PUBLIC_CONSENT_ENABLED=1
 ```
 
 Deployment assets live under `deploy/ecs/`. The staging GitHub Actions workflow

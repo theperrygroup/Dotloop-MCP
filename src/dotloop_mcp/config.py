@@ -214,6 +214,45 @@ class DotloopMcpAuthSettings:
 
 
 @dataclass(frozen=True)
+class DotloopHostedOAuthSettings:
+    """Settings for the built-in hosted OAuth authorization server."""
+
+    enabled: bool = False
+    public_consent_enabled: bool = False
+    authorization_code_seconds: int = 300
+    access_token_seconds: int = 3600
+    refresh_token_seconds: int = 2592000
+
+    @classmethod
+    def from_env(cls, env_file: str | Path | None = None) -> DotloopHostedOAuthSettings:
+        """Load hosted OAuth authorization-server settings from environment variables."""
+        load_dotloop_env_file(env_file)
+        enabled = _read_bool("DOTLOOP_MCP_HOSTED_OAUTH_ENABLED", False)
+        if not enabled:
+            return cls()
+
+        return cls(
+            enabled=True,
+            public_consent_enabled=_read_bool(
+                "DOTLOOP_MCP_HOSTED_OAUTH_PUBLIC_CONSENT_ENABLED",
+                False,
+            ),
+            authorization_code_seconds=_read_int(
+                "DOTLOOP_MCP_HOSTED_OAUTH_AUTHORIZATION_CODE_SECONDS",
+                cls.authorization_code_seconds,
+            ),
+            access_token_seconds=_read_int(
+                "DOTLOOP_MCP_HOSTED_OAUTH_ACCESS_TOKEN_SECONDS",
+                cls.access_token_seconds,
+            ),
+            refresh_token_seconds=_read_int(
+                "DOTLOOP_MCP_HOSTED_OAUTH_REFRESH_TOKEN_SECONDS",
+                cls.refresh_token_seconds,
+            ),
+        )
+
+
+@dataclass(frozen=True)
 class DotloopServerSettings:
     """Settings used to start the MCP server."""
 
@@ -224,6 +263,7 @@ class DotloopServerSettings:
     log_level: str = "INFO"
     allow_missing_access_token: bool = False
     mcp_auth: DotloopMcpAuthSettings = field(default_factory=DotloopMcpAuthSettings)
+    hosted_oauth: DotloopHostedOAuthSettings = field(default_factory=DotloopHostedOAuthSettings)
 
     @classmethod
     def from_env(cls, env_file: str | Path | None = None) -> DotloopServerSettings:
@@ -257,4 +297,5 @@ class DotloopServerSettings:
             log_level=os.getenv("DOTLOOP_LOG_LEVEL", cls.log_level).upper(),
             allow_missing_access_token=_read_bool("DOTLOOP_ALLOW_MISSING_ACCESS_TOKEN", False),
             mcp_auth=DotloopMcpAuthSettings.from_env(env_file),
+            hosted_oauth=DotloopHostedOAuthSettings.from_env(env_file),
         )

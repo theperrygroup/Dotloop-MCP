@@ -40,6 +40,21 @@ Before registering the task definition, replace:
 | `__TASK_EXECUTION_ROLE_ARN__` | ECS task execution role ARN. |
 | `__TASK_ROLE_ARN__` | ECS task role ARN used by the app at runtime. |
 
+The staging task template enables the built-in hosted OAuth issuer with public
+consent so MCP clients can complete URL authentication without a separate
+identity provider:
+
+```text
+DOTLOOP_MCP_HOSTED_OAUTH_ENABLED=1
+DOTLOOP_MCP_HOSTED_OAUTH_PUBLIC_CONSENT_ENABLED=1
+DOTLOOP_MCP_AUTH_JWKS_URL=https://dotloop.theperry.group/.well-known/jwks.json
+```
+
+Public consent is only acceptable for metadata/auth-only staging while no live
+Dotloop access token is attached. Disable it or replace it with a real
+login/consent boundary before enabling live Dotloop data access in hosted
+runtime.
+
 ## GitHub Actions Staging Deploy
 
 `.github/workflows/deploy-staging.yml` validates the repo, builds a multi-arch
@@ -79,3 +94,11 @@ error until that secret is added.
 The target group health matcher should accept `401` for `/mcp`, because a
 hosted unauthenticated MCP request is expected to fail closed with
 `invalid_token`.
+
+The same public host should serve authorization-server discovery:
+
+```text
+https://dotloop.theperry.group/.well-known/oauth-authorization-server
+https://dotloop.theperry.group/.well-known/openid-configuration
+https://dotloop.theperry.group/.well-known/jwks.json
+```
