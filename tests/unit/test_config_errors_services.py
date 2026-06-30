@@ -138,6 +138,7 @@ def test_server_settings_loads_overrides(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setenv("DOTLOOP_PORT", "8123")
     monkeypatch.setenv("DOTLOOP_STREAMABLE_HTTP_PATH", "/custom")
     monkeypatch.setenv("DOTLOOP_LOG_LEVEL", "debug")
+    monkeypatch.setenv("DOTLOOP_ALLOW_MISSING_ACCESS_TOKEN", "1")
 
     settings = DotloopServerSettings.from_env()
 
@@ -146,6 +147,7 @@ def test_server_settings_loads_overrides(monkeypatch: pytest.MonkeyPatch) -> Non
     assert settings.port == 8123
     assert settings.streamable_http_path == "/custom"
     assert settings.log_level == "DEBUG"
+    assert settings.allow_missing_access_token is True
 
 
 def test_server_settings_validates_transport(monkeypatch: pytest.MonkeyPatch) -> None:

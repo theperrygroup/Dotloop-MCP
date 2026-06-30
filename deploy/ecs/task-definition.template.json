@@ -59,6 +59,10 @@
           "value": "30"
         },
         {
+          "name": "DOTLOOP_ALLOW_MISSING_ACCESS_TOKEN",
+          "value": "1"
+        },
+        {
           "name": "DOTLOOP_MCP_AUTH_ENABLED",
           "value": "1"
         },

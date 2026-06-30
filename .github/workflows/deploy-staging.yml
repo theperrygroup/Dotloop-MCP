@@ -25,6 +25,9 @@ jobs:
       ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
       ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
       ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+      ECS_SECURITY_GROUP_IDS: ${{ vars.ECS_SECURITY_GROUP_IDS }}
+      ECS_SUBNET_IDS: ${{ vars.ECS_SUBNET_IDS }}
+      ECS_TARGET_GROUP_ARN: ${{ vars.ECS_TARGET_GROUP_ARN }}
       LOG_GROUP_NAME: ${{ vars.LOG_GROUP_NAME }}
       MCP_AUTH_AUDIENCE: ${{ vars.MCP_AUTH_AUDIENCE }}
       MCP_AUTH_ISSUER_URL: ${{ vars.MCP_AUTH_ISSUER_URL }}
@@ -50,12 +53,14 @@ jobs:
             ECR_REPOSITORY
             ECS_CLUSTER
             ECS_SERVICE
+            ECS_SECURITY_GROUP_IDS
+            ECS_SUBNET_IDS
+            ECS_TARGET_GROUP_ARN
             LOG_GROUP_NAME
             MCP_AUTH_ISSUER_URL
             MCP_AUTH_JWKS_URL
             MCP_AUTH_RESOURCE_SERVER_URL
             AWS_ROLE_TO_ASSUME
-            DOTLOOP_ACCESS_TOKEN_SECRET_ARN
             TASK_EXECUTION_ROLE_ARN
             TASK_ROLE_ARN
           )
@@ -103,6 +108,9 @@ jobs:
       ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
       ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
       ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+      ECS_SECURITY_GROUP_IDS: ${{ vars.ECS_SECURITY_GROUP_IDS }}
+      ECS_SUBNET_IDS: ${{ vars.ECS_SUBNET_IDS }}
+      ECS_TARGET_GROUP_ARN: ${{ vars.ECS_TARGET_GROUP_ARN }}
       LOG_GROUP_NAME: ${{ vars.LOG_GROUP_NAME }}
       MCP_AUTH_AUDIENCE: ${{ vars.MCP_AUTH_AUDIENCE }}
       MCP_AUTH_ISSUER_URL: ${{ vars.MCP_AUTH_ISSUER_URL }}
@@ -206,6 +214,13 @@ jobs:
           rendered_path = Path("deploy/ecs/task-definition.rendered.json")
           task_definition = json.loads(template_path.read_text(encoding="utf-8"))
           rendered_task_definition = replace_placeholders(task_definition, replacements)
+          if not os.environ.get("DOTLOOP_ACCESS_TOKEN_SECRET_ARN"):
+              for container in rendered_task_definition.get("containerDefinitions", []):
+                  container["secrets"] = [
+                      secret
+                      for secret in container.get("secrets", [])
+                      if secret.get("name") != "DOTLOOP_ACCESS_TOKEN"
+                  ]
           rendered_text = json.dumps(rendered_task_definition, indent=2) + "\n"
           missing = sorted(set(re.findall(r"__[A-Z0-9_]+__", rendered_text)))
           if missing:
@@ -238,12 +253,30 @@ jobs:
       - name: Deploy ECS service
         shell: bash
         run: |
-          aws ecs update-service \
+          service_count="$(aws ecs describe-services \
             --cluster "${ECS_CLUSTER}" \
-            --service "${ECS_SERVICE}" \
-            --task-definition "${{ steps.register-task.outputs.task_definition_arn }}" \
-            --force-new-deployment \
-            --region "${AWS_REGION}"
+            --services "${ECS_SERVICE}" \
+            --region "${AWS_REGION}" \
+            --query 'length(services[?status!=`INACTIVE`])' \
+            --output text)"
+          if [ "${service_count}" = "0" ]; then
+            aws ecs create-service \
+              --cluster "${ECS_CLUSTER}" \
+              --service-name "${ECS_SERVICE}" \
+              --task-definition "${{ steps.register-task.outputs.task_definition_arn }}" \
+              --desired-count 1 \
+              --launch-type FARGATE \
+              --network-configuration "awsvpcConfiguration={subnets=[${ECS_SUBNET_IDS}],securityGroups=[${ECS_SECURITY_GROUP_IDS}],assignPublicIp=ENABLED}" \
+              --load-balancers "targetGroupArn=${ECS_TARGET_GROUP_ARN},containerName=dotloop-mcp-hosted,containerPort=8000" \
+              --region "${AWS_REGION}"
+          else
+            aws ecs update-service \
+              --cluster "${ECS_CLUSTER}" \
+              --service "${ECS_SERVICE}" \
+              --task-definition "${{ steps.register-task.outputs.task_definition_arn }}" \
+              --force-new-deployment \
+              --region "${AWS_REGION}"
+          fi
 
       - name: Wait for service stability
         shell: bash

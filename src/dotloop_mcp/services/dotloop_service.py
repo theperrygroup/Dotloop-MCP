@@ -364,3 +364,26 @@ class DotloopService:
     async def get_custom_templates(self, profile_id: int) -> JsonObject:
         """Get custom templates."""
         return await self._call_json(lambda: self._client.template.get_custom_templates(profile_id))
+
+
+class UnavailableDotloopService(DotloopService):
+    """Service adapter used when hosted MCP auth is ready before Dotloop API auth."""
+
+    def __init__(self, reason: str) -> None:
+        """Initialize an unavailable service with an MCP-safe reason."""
+        super().__init__(client=object())
+        self._reason = reason
+
+    async def _call_json(self, operation: Callable[[], object]) -> JsonObject:
+        raise DotloopMCPError(self._reason)
+
+    async def _call_bytes(self, operation: Callable[[], object]) -> bytes:
+        raise DotloopMCPError(self._reason)
+
+    async def get_account(self) -> JsonObject:
+        """Reject account reads until Dotloop API credentials are configured."""
+        raise DotloopMCPError(self._reason)
+
+    async def list_profiles(self) -> JsonObject:
+        """Reject profile reads until Dotloop API credentials are configured."""
+        raise DotloopMCPError(self._reason)

@@ -29,7 +29,7 @@ Before registering the task definition, replace:
 | Placeholder | Meaning |
 | --- | --- |
 | `__AWS_REGION__` | AWS region, such as `us-west-1`. |
-| `__DOTLOOP_ACCESS_TOKEN_SECRET_ARN__` | Secrets Manager ARN whose secret string is the Dotloop access token. |
+| `__DOTLOOP_ACCESS_TOKEN_SECRET_ARN__` | Optional Secrets Manager ARN whose secret string is the Dotloop access token. Omit for metadata/auth-only staging. |
 | `__IMAGE_URI__` | Full ECR image URI, including tag or digest. |
 | `__LOG_GROUP_NAME__` | CloudWatch Logs group name for the ECS service. |
 | `__MCP_AUTH_AUDIENCE__` | Optional issuer-specific JWT audience; leave empty when the public MCP URL is the audience. |
@@ -43,8 +43,8 @@ Before registering the task definition, replace:
 ## GitHub Actions Staging Deploy
 
 `.github/workflows/deploy-staging.yml` validates the repo, builds a multi-arch
-Docker image, pushes it to ECR, renders the task definition, updates the ECS
-service, and waits for service stability.
+Docker image, pushes it to ECR, renders the task definition, creates or updates
+the ECS service, and waits for service stability.
 
 Configure a GitHub Actions environment named `staging` with these variables:
 
@@ -52,6 +52,9 @@ Configure a GitHub Actions environment named `staging` with these variables:
 - `ECR_REPOSITORY`
 - `ECS_CLUSTER`
 - `ECS_SERVICE`
+- `ECS_SECURITY_GROUP_IDS` (comma-separated security group IDs)
+- `ECS_SUBNET_IDS` (comma-separated subnet IDs)
+- `ECS_TARGET_GROUP_ARN`
 - `LOG_GROUP_NAME`
 - `MCP_AUTH_ISSUER_URL`
 - `MCP_AUTH_RESOURCE_SERVER_URL`
@@ -62,13 +65,16 @@ Configure a GitHub Actions environment named `staging` with these variables:
 Configure the same environment with these secrets:
 
 - `AWS_ROLE_TO_ASSUME`
-- `DOTLOOP_ACCESS_TOKEN_SECRET_ARN`
+- `DOTLOOP_ACCESS_TOKEN_SECRET_ARN` (optional until live Dotloop reads are enabled)
 - `TASK_EXECUTION_ROLE_ARN`
 - `TASK_ROLE_ARN`
 
 When any required staging value is absent, the workflow still runs release
 validation but skips the AWS deploy job. Once every required variable and secret
-is configured, the same workflow activates the hosted deployment path.
+is configured, the same workflow activates the hosted deployment path. If
+`DOTLOOP_ACCESS_TOKEN_SECRET_ARN` is absent, the hosted server still boots and
+authenticates MCP callers, but Dotloop data tools return a clear missing-token
+error until that secret is added.
 
 The target group health matcher should accept `401` for `/mcp`, because a
 hosted unauthenticated MCP request is expected to fail closed with

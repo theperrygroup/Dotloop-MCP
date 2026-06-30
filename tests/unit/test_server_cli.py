@@ -162,6 +162,27 @@ async def test_create_server_constructs_client_from_settings(
 
 
 @pytest.mark.asyncio
+async def test_create_server_can_boot_with_unavailable_dotloop_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("DOTLOOP_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("DOTLOOP_API_KEY", raising=False)
+
+    server = server_module.create_server(
+        server_settings=DotloopServerSettings(allow_missing_access_token=True),
+    )
+    tools = {tool.name for tool in await server.list_tools()}
+    resource_contents = list(await server.read_resource(COVERAGE_RESOURCE_URI))
+
+    assert "dotloop_get_account" in tools
+    assert "Dotloop MCP API Coverage Matrix" in resource_contents[0].content
+    with pytest.raises(DotloopConfigurationError, match="access token"):
+        server_module.create_server(server_settings=DotloopServerSettings())
+    with pytest.raises(Exception, match="Dotloop access token is not configured"):
+        await server.call_tool("dotloop_get_account", {})
+
+
+@pytest.mark.asyncio
 async def test_coverage_resource_uses_static_fallback(tmp_path: Path) -> None:
     server = FastMCP("Test Dotloop MCP")
     register_server_surface(

@@ -222,6 +222,7 @@ class DotloopServerSettings:
     port: int = 8000
     streamable_http_path: str = "/mcp"
     log_level: str = "INFO"
+    allow_missing_access_token: bool = False
     mcp_auth: DotloopMcpAuthSettings = field(default_factory=DotloopMcpAuthSettings)
 
     @classmethod
@@ -254,5 +255,6 @@ class DotloopServerSettings:
                 cls.streamable_http_path,
             ),
             log_level=os.getenv("DOTLOOP_LOG_LEVEL", cls.log_level).upper(),
+            allow_missing_access_token=_read_bool("DOTLOOP_ALLOW_MISSING_ACCESS_TOKEN", False),
             mcp_auth=DotloopMcpAuthSettings.from_env(env_file),
         )

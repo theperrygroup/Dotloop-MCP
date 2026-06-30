@@ -8,11 +8,11 @@ from typing import Any, Literal, cast
 from dotloop import DotloopClient
 
 from dotloop_mcp.auth import DotloopMcpJwtVerifier, build_mcp_auth_settings
-from dotloop_mcp.config import DotloopServerSettings, DotloopSettings
+from dotloop_mcp.config import DotloopConfigurationError, DotloopServerSettings, DotloopSettings
 from dotloop_mcp.logging import configure_logging
 from dotloop_mcp.mcp_registration import register_server_surface
 from dotloop_mcp.mcp_tools import DotloopToolAdapter
-from dotloop_mcp.services import DotloopService
+from dotloop_mcp.services import DotloopService, UnavailableDotloopService
 from mcp.server.auth.provider import TokenVerifier
 from mcp.server.fastmcp import FastMCP
 
@@ -50,13 +50,22 @@ def create_server(
 
     if service is None:
         if client is None:
-            resolved_settings = settings or DotloopSettings.from_env()
-            client = DotloopClient(
-                api_key=resolved_settings.access_token,
-                base_url=resolved_settings.base_url,
-                timeout=resolved_settings.timeout,
-            )
-        service = DotloopService(client)
+            try:
+                resolved_settings = settings or DotloopSettings.from_env()
+            except DotloopConfigurationError:
+                if not resolved_server_settings.allow_missing_access_token:
+                    raise
+                service = UnavailableDotloopService(
+                    "Dotloop access token is not configured for this hosted MCP deployment."
+                )
+            else:
+                client = DotloopClient(
+                    api_key=resolved_settings.access_token,
+                    base_url=resolved_settings.base_url,
+                    timeout=resolved_settings.timeout,
+                )
+        if service is None:
+            service = DotloopService(client)
 
     adapter = DotloopToolAdapter(service)
     mcp_auth = resolved_server_settings.mcp_auth
