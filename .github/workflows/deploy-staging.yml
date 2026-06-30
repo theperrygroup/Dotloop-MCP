@@ -18,6 +18,8 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     environment: staging
+    outputs:
+      deploy_ready: ${{ steps.check_config.outputs.deploy_ready }}
     env:
       AWS_REGION: ${{ vars.AWS_REGION }}
       ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
@@ -39,7 +41,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Verify staging workflow configuration
+      - name: Check staging deployment activation
+        id: check_config
         shell: bash
         run: |
           required_values=(
@@ -56,12 +59,29 @@ jobs:
             TASK_EXECUTION_ROLE_ARN
             TASK_ROLE_ARN
           )
+          missing=()
           for name in "${required_values[@]}"; do
             if [ -z "${!name}" ]; then
-              printf "Missing required staging configuration: %s\n" "${name}" >&2
-              exit 1
+              missing+=("${name}")
             fi
           done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            {
+              printf "deploy_ready=false\n"
+              printf "missing_config=%s\n" "$(IFS=,; echo "${missing[*]}")"
+            } >> "${GITHUB_OUTPUT}"
+            {
+              printf "## Staging deploy skipped\n\n"
+              printf "Release validation will run, but AWS deploy is not activated yet.\n\n"
+              printf "Missing GitHub Actions staging configuration:\n"
+              for name in "${missing[@]}"; do
+                printf -- "- `%s`\n" "${name}"
+              done
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+          printf "deploy_ready=true\n" >> "${GITHUB_OUTPUT}"
+          printf "Staging deploy configuration is present.\n" >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v7
@@ -75,6 +95,7 @@ jobs:
   deploy:
     needs:
       - validate
+    if: needs.validate.outputs.deploy_ready == 'true'
     runs-on: ubuntu-latest
     environment: staging
     env:

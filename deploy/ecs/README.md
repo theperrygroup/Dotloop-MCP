@@ -66,6 +66,10 @@ Configure the same environment with these secrets:
 - `TASK_EXECUTION_ROLE_ARN`
 - `TASK_ROLE_ARN`
 
+When any required staging value is absent, the workflow still runs release
+validation but skips the AWS deploy job. Once every required variable and secret
+is configured, the same workflow activates the hosted deployment path.
+
 The target group health matcher should accept `401` for `/mcp`, because a
 hosted unauthenticated MCP request is expected to fail closed with
 `invalid_token`.
