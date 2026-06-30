@@ -29,7 +29,12 @@ Before registering the task definition, replace:
 | Placeholder | Meaning |
 | --- | --- |
 | `__AWS_REGION__` | AWS region, such as `us-west-1`. |
-| `__DOTLOOP_ACCESS_TOKEN_SECRET_ARN__` | Optional Secrets Manager ARN whose secret string is the Dotloop access token. Omit for metadata/auth-only staging. |
+| `__DOTLOOP_API_CLIENT_ID_SECRET_ARN__` | Secrets Manager ARN whose secret string is the Dotloop app client id. |
+| `__DOTLOOP_API_SECRET_SECRET_ARN__` | Secrets Manager ARN whose secret string is the Dotloop app client secret. |
+| `__DOTLOOP_APP_OAUTH_REDIRECT_URL__` | Dotloop OAuth callback URL, normally `https://dotloop.theperry.group/oauth/dotloop/callback`. |
+| `__DOTLOOP_APP_OAUTH_TOKEN_SECRET_ARN__` | Secrets Manager ARN for the refreshable Dotloop token-state JSON store. |
+| `__DOTLOOP_BATTLE_FIXTURE_MODE__` | Optional fixture-mode switch for AI battle tests; defaults to `0`. |
+| `__DOTLOOP_BATTLE_RECORD_PATH__` | Optional JSONL call-log path for fixture-mode battle tests. |
 | `__IMAGE_URI__` | Full ECR image URI, including tag or digest. |
 | `__LOG_GROUP_NAME__` | CloudWatch Logs group name for the ECS service. |
 | `__MCP_AUTH_AUDIENCE__` | Optional issuer-specific JWT audience; leave empty when the public MCP URL is the audience. |
@@ -40,20 +45,34 @@ Before registering the task definition, replace:
 | `__TASK_EXECUTION_ROLE_ARN__` | ECS task execution role ARN. |
 | `__TASK_ROLE_ARN__` | ECS task role ARN used by the app at runtime. |
 
-The staging task template enables the built-in hosted OAuth issuer with public
-consent so MCP clients can complete URL authentication without a separate
-identity provider:
+The staging task template enables the built-in hosted OAuth issuer and uses
+Dotloop app OAuth as the consent boundary for live Dotloop API access:
 
 ```text
+DOTLOOP_APP_OAUTH_ENABLED=1
+DOTLOOP_APP_OAUTH_REDIRECT_URL=https://dotloop.theperry.group/oauth/dotloop/callback
 DOTLOOP_MCP_HOSTED_OAUTH_ENABLED=1
-DOTLOOP_MCP_HOSTED_OAUTH_PUBLIC_CONSENT_ENABLED=1
+DOTLOOP_MCP_HOSTED_OAUTH_PUBLIC_CONSENT_ENABLED=0
 DOTLOOP_MCP_AUTH_JWKS_URL=https://dotloop.theperry.group/.well-known/jwks.json
 ```
 
-Public consent is only acceptable for metadata/auth-only staging while no live
-Dotloop access token is attached. Disable it or replace it with a real
-login/consent boundary before enabling live Dotloop data access in hosted
-runtime.
+The Dotloop app must allow `https://dotloop.theperry.group/oauth/dotloop/callback`
+as a redirect URI. The refreshable token-state secret starts empty and is
+populated after a browser completes the first connector authorization.
+
+## Hosted Battle Testing
+
+For ChatGPT connector battle tests, deploy staging with deterministic fixture
+mode before attaching live Dotloop credentials:
+
+```text
+DOTLOOP_BATTLE_FIXTURE_MODE=1
+DOTLOOP_BATTLE_RECORD_PATH=/tmp/ai-battle/chatgpt/mcp_calls.jsonl
+```
+
+Fixture mode is incompatible with `DOTLOOP_RUN_LIVE_TESTS=1`, does not build a
+real Dotloop API client, and should be scored with `scripts/battle_report.py`
+after retrieving the JSONL call log from the container or log export path.
 
 ## GitHub Actions Staging Deploy
 
@@ -71,6 +90,9 @@ Configure a GitHub Actions environment named `staging` with these variables:
 - `ECS_SUBNET_IDS` (comma-separated subnet IDs)
 - `ECS_TARGET_GROUP_ARN`
 - `LOG_GROUP_NAME`
+- `DOTLOOP_APP_OAUTH_REDIRECT_URL` (optional; defaults to `https://dotloop.theperry.group/oauth/dotloop/callback`)
+- `DOTLOOP_BATTLE_FIXTURE_MODE` (optional; defaults to `0`)
+- `DOTLOOP_BATTLE_RECORD_PATH` (optional; defaults to `/tmp/ai-battle/staging/mcp_calls.jsonl`)
 - `MCP_AUTH_ISSUER_URL`
 - `MCP_AUTH_RESOURCE_SERVER_URL`
 - `MCP_AUTH_JWKS_URL`
@@ -80,16 +102,15 @@ Configure a GitHub Actions environment named `staging` with these variables:
 Configure the same environment with these secrets:
 
 - `AWS_ROLE_TO_ASSUME`
-- `DOTLOOP_ACCESS_TOKEN_SECRET_ARN` (optional until live Dotloop reads are enabled)
+- `DOTLOOP_API_CLIENT_ID_SECRET_ARN`
+- `DOTLOOP_API_SECRET_SECRET_ARN`
+- `DOTLOOP_APP_OAUTH_TOKEN_SECRET_ARN`
 - `TASK_EXECUTION_ROLE_ARN`
 - `TASK_ROLE_ARN`
 
 When any required staging value is absent, the workflow still runs release
 validation but skips the AWS deploy job. Once every required variable and secret
-is configured, the same workflow activates the hosted deployment path. If
-`DOTLOOP_ACCESS_TOKEN_SECRET_ARN` is absent, the hosted server still boots and
-authenticates MCP callers, but Dotloop data tools return a clear missing-token
-error until that secret is added.
+is configured, the same workflow activates the hosted deployment path.
 
 The target group health matcher should accept `401` for `/mcp`, because a
 hosted unauthenticated MCP request is expected to fail closed with

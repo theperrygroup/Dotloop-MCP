@@ -12,6 +12,7 @@ license = { text = "MIT" }
 authors = [{ name = "The Perry Group" }]
 dependencies = [
   "anyio>=4.0.0,<5",
+  "boto3>=1.35.0,<2",
   "dotloop==1.3.2",
   "httpx>=0.28.0,<1",
   "mcp[cli]>=1.17.0,<2",

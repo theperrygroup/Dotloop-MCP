@@ -13,6 +13,7 @@ from dotloop_mcp import cli as cli_module
 from dotloop_mcp import hosted_reference as hosted_module
 from dotloop_mcp import mcp_server as server_module
 from dotloop_mcp.config import (
+    DotloopAppOAuthSettings,
     DotloopConfigurationError,
     DotloopHostedOAuthSettings,
     DotloopMcpAuthSettings,
@@ -161,6 +162,50 @@ async def test_create_server_constructs_client_from_settings(
         }
     ]
     assert payload["data"]["firstName"] == "Ada"
+
+
+@pytest.mark.asyncio
+async def test_create_server_uses_dotloop_app_oauth_client_factory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ConstructedFakeDotloopClient.calls.clear()
+
+    class FakeCredentialProvider:
+        def build_client_factory(self) -> object:
+            return lambda: ConstructedFakeDotloopClient(
+                api_key="oauth-token",
+                base_url="https://example.test/public/v2",
+                timeout=19,
+            )
+
+    monkeypatch.setattr(
+        server_module,
+        "build_dotloop_app_credential_provider",
+        lambda _: FakeCredentialProvider(),
+    )
+
+    server = server_module.create_server(
+        server_settings=DotloopServerSettings(
+            app_oauth=DotloopAppOAuthSettings(
+                enabled=True,
+                client_id="client-id",
+                client_secret="client-secret",
+                redirect_url="https://dotloop.example.com/oauth/dotloop/callback",
+                token_secret_arn="secret-id",
+                base_url="https://example.test/public/v2",
+                timeout=19,
+            )
+        )
+    )
+    await server.call_tool("dotloop_get_account", {})
+
+    assert ConstructedFakeDotloopClient.calls == [
+        {
+            "api_key": "oauth-token",
+            "base_url": "https://example.test/public/v2",
+            "timeout": 19,
+        }
+    ]
 
 
 @pytest.mark.asyncio

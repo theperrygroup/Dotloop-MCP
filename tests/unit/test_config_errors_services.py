@@ -24,6 +24,7 @@ from pydantic import ValidationError as PydanticValidationError
 from tests.conftest import FakeDotloopClient
 
 from dotloop_mcp.config import (
+    DotloopAppOAuthSettings,
     DotloopConfigurationError,
     DotloopHostedOAuthSettings,
     DotloopMcpAuthSettings,
@@ -140,6 +141,8 @@ def test_server_settings_loads_overrides(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setenv("DOTLOOP_STREAMABLE_HTTP_PATH", "/custom")
     monkeypatch.setenv("DOTLOOP_LOG_LEVEL", "debug")
     monkeypatch.setenv("DOTLOOP_ALLOW_MISSING_ACCESS_TOKEN", "1")
+    monkeypatch.setenv("DOTLOOP_BATTLE_FIXTURE_MODE", "1")
+    monkeypatch.setenv("DOTLOOP_BATTLE_RECORD_PATH", "tmp/ai-battle/test/mcp_calls.jsonl")
 
     settings = DotloopServerSettings.from_env()
 
@@ -149,12 +152,24 @@ def test_server_settings_loads_overrides(monkeypatch: pytest.MonkeyPatch) -> Non
     assert settings.streamable_http_path == "/custom"
     assert settings.log_level == "DEBUG"
     assert settings.allow_missing_access_token is True
+    assert settings.battle_fixture_mode is True
+    assert settings.battle_record_path == "tmp/ai-battle/test/mcp_calls.jsonl"
 
 
 def test_server_settings_validates_transport(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DOTLOOP_TRANSPORT", "bad")
 
     with pytest.raises(DotloopConfigurationError, match="DOTLOOP_TRANSPORT"):
+        DotloopServerSettings.from_env()
+
+
+def test_server_settings_rejects_battle_fixture_with_live_tests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DOTLOOP_BATTLE_FIXTURE_MODE", "1")
+    monkeypatch.setenv("DOTLOOP_RUN_LIVE_TESTS", "1")
+
+    with pytest.raises(DotloopConfigurationError, match="BATTLE_FIXTURE_MODE"):
         DotloopServerSettings.from_env()
 
 
@@ -228,6 +243,50 @@ def test_hosted_oauth_settings_loads_staging_switches(monkeypatch: pytest.Monkey
     assert settings.authorization_code_seconds == 120
     assert settings.access_token_seconds == 600
     assert settings.refresh_token_seconds == 900
+
+
+def test_dotloop_app_oauth_settings_loads_required_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DOTLOOP_APP_OAUTH_ENABLED", "1")
+    monkeypatch.setenv("DOTLOOP_API_CLIENT_ID", "client-id")
+    monkeypatch.setenv("DOTLOOP_API_SECRET", "client-secret")
+    monkeypatch.setenv("DOTLOOP_APP_OAUTH_REDIRECT_URL", "https://Dotloop.Example.com/callback/")
+    monkeypatch.setenv("DOTLOOP_APP_OAUTH_TOKEN_SECRET_ARN", "arn:aws:secretsmanager:token")
+    monkeypatch.setenv("DOTLOOP_APP_OAUTH_TOKEN_REFRESH_LEEWAY_SECONDS", "60")
+    monkeypatch.setenv("DOTLOOP_APP_OAUTH_TOKEN_REQUEST_TIMEOUT_SECONDS", "10")
+
+    settings = DotloopAppOAuthSettings.from_env()
+
+    assert settings.enabled is True
+    assert settings.client_id == "client-id"
+    assert settings.client_secret == "client-secret"
+    assert settings.redirect_url == "https://dotloop.example.com/callback"
+    assert settings.token_secret_arn == "arn:aws:secretsmanager:token"
+    assert settings.token_refresh_leeway_seconds == 60
+    assert settings.token_request_timeout_seconds == 10
+
+
+def test_dotloop_app_oauth_settings_requires_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DOTLOOP_APP_OAUTH_ENABLED", "1")
+
+    with pytest.raises(DotloopConfigurationError, match="DOTLOOP_API_CLIENT_ID"):
+        DotloopAppOAuthSettings.from_env()
+
+
+def test_dotloop_app_oauth_settings_rejects_unsafe_redirect_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DOTLOOP_APP_OAUTH_ENABLED", "1")
+    monkeypatch.setenv("DOTLOOP_API_CLIENT_ID", "client-id")
+    monkeypatch.setenv("DOTLOOP_API_SECRET", "client-secret")
+    monkeypatch.setenv("DOTLOOP_APP_OAUTH_REDIRECT_URL", "https://dotloop.example.com/cb?x=1")
+    monkeypatch.setenv("DOTLOOP_APP_OAUTH_TOKEN_SECRET_ARN", "arn:aws:secretsmanager:token")
+
+    with pytest.raises(DotloopConfigurationError, match="query"):
+        DotloopAppOAuthSettings.from_env()
 
 
 @pytest.mark.parametrize(

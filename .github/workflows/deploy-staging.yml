@@ -34,8 +34,13 @@ jobs:
       MCP_AUTH_JWKS_URL: ${{ vars.MCP_AUTH_JWKS_URL }}
       MCP_AUTH_REQUIRED_SCOPES: ${{ vars.MCP_AUTH_REQUIRED_SCOPES || 'dotloop:read' }}
       MCP_AUTH_RESOURCE_SERVER_URL: ${{ vars.MCP_AUTH_RESOURCE_SERVER_URL }}
+      DOTLOOP_APP_OAUTH_REDIRECT_URL: ${{ vars.DOTLOOP_APP_OAUTH_REDIRECT_URL || 'https://dotloop.theperry.group/oauth/dotloop/callback' }}
+      DOTLOOP_BATTLE_FIXTURE_MODE: ${{ vars.DOTLOOP_BATTLE_FIXTURE_MODE || '0' }}
+      DOTLOOP_BATTLE_RECORD_PATH: ${{ vars.DOTLOOP_BATTLE_RECORD_PATH || '/tmp/ai-battle/staging/mcp_calls.jsonl' }}
       AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-      DOTLOOP_ACCESS_TOKEN_SECRET_ARN: ${{ secrets.DOTLOOP_ACCESS_TOKEN_SECRET_ARN }}
+      DOTLOOP_API_CLIENT_ID_SECRET_ARN: ${{ secrets.DOTLOOP_API_CLIENT_ID_SECRET_ARN }}
+      DOTLOOP_API_SECRET_SECRET_ARN: ${{ secrets.DOTLOOP_API_SECRET_SECRET_ARN }}
+      DOTLOOP_APP_OAUTH_TOKEN_SECRET_ARN: ${{ secrets.DOTLOOP_APP_OAUTH_TOKEN_SECRET_ARN }}
       TASK_EXECUTION_ROLE_ARN: ${{ secrets.TASK_EXECUTION_ROLE_ARN }}
       TASK_ROLE_ARN: ${{ secrets.TASK_ROLE_ARN }}
     steps:
@@ -57,10 +62,14 @@ jobs:
             ECS_SUBNET_IDS
             ECS_TARGET_GROUP_ARN
             LOG_GROUP_NAME
+            DOTLOOP_APP_OAUTH_REDIRECT_URL
             MCP_AUTH_ISSUER_URL
             MCP_AUTH_JWKS_URL
             MCP_AUTH_RESOURCE_SERVER_URL
             AWS_ROLE_TO_ASSUME
+            DOTLOOP_API_CLIENT_ID_SECRET_ARN
+            DOTLOOP_API_SECRET_SECRET_ARN
+            DOTLOOP_APP_OAUTH_TOKEN_SECRET_ARN
             TASK_EXECUTION_ROLE_ARN
             TASK_ROLE_ARN
           )
@@ -117,8 +126,13 @@ jobs:
       MCP_AUTH_JWKS_URL: ${{ vars.MCP_AUTH_JWKS_URL }}
       MCP_AUTH_REQUIRED_SCOPES: ${{ vars.MCP_AUTH_REQUIRED_SCOPES || 'dotloop:read' }}
       MCP_AUTH_RESOURCE_SERVER_URL: ${{ vars.MCP_AUTH_RESOURCE_SERVER_URL }}
+      DOTLOOP_APP_OAUTH_REDIRECT_URL: ${{ vars.DOTLOOP_APP_OAUTH_REDIRECT_URL || 'https://dotloop.theperry.group/oauth/dotloop/callback' }}
+      DOTLOOP_BATTLE_FIXTURE_MODE: ${{ vars.DOTLOOP_BATTLE_FIXTURE_MODE || '0' }}
+      DOTLOOP_BATTLE_RECORD_PATH: ${{ vars.DOTLOOP_BATTLE_RECORD_PATH || '/tmp/ai-battle/staging/mcp_calls.jsonl' }}
       AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-      DOTLOOP_ACCESS_TOKEN_SECRET_ARN: ${{ secrets.DOTLOOP_ACCESS_TOKEN_SECRET_ARN }}
+      DOTLOOP_API_CLIENT_ID_SECRET_ARN: ${{ secrets.DOTLOOP_API_CLIENT_ID_SECRET_ARN }}
+      DOTLOOP_API_SECRET_SECRET_ARN: ${{ secrets.DOTLOOP_API_SECRET_SECRET_ARN }}
+      DOTLOOP_APP_OAUTH_TOKEN_SECRET_ARN: ${{ secrets.DOTLOOP_APP_OAUTH_TOKEN_SECRET_ARN }}
       TASK_EXECUTION_ROLE_ARN: ${{ secrets.TASK_EXECUTION_ROLE_ARN }}
       TASK_ROLE_ARN: ${{ secrets.TASK_ROLE_ARN }}
     steps:
@@ -193,9 +207,26 @@ jobs:
 
           replacements = {
               "__AWS_REGION__": os.environ["AWS_REGION"],
-              "__DOTLOOP_ACCESS_TOKEN_SECRET_ARN__": os.environ[
-                  "DOTLOOP_ACCESS_TOKEN_SECRET_ARN"
+              "__DOTLOOP_API_CLIENT_ID_SECRET_ARN__": os.environ[
+                  "DOTLOOP_API_CLIENT_ID_SECRET_ARN"
               ],
+              "__DOTLOOP_API_SECRET_SECRET_ARN__": os.environ[
+                  "DOTLOOP_API_SECRET_SECRET_ARN"
+              ],
+              "__DOTLOOP_APP_OAUTH_REDIRECT_URL__": os.environ[
+                  "DOTLOOP_APP_OAUTH_REDIRECT_URL"
+              ],
+              "__DOTLOOP_APP_OAUTH_TOKEN_SECRET_ARN__": os.environ[
+                  "DOTLOOP_APP_OAUTH_TOKEN_SECRET_ARN"
+              ],
+              "__DOTLOOP_BATTLE_FIXTURE_MODE__": os.environ.get(
+                  "DOTLOOP_BATTLE_FIXTURE_MODE",
+                  "0",
+              ),
+              "__DOTLOOP_BATTLE_RECORD_PATH__": os.environ.get(
+                  "DOTLOOP_BATTLE_RECORD_PATH",
+                  "/tmp/ai-battle/staging/mcp_calls.jsonl",
+              ),
               "__IMAGE_URI__": os.environ["IMAGE_URI"],
               "__LOG_GROUP_NAME__": os.environ["LOG_GROUP_NAME"],
               "__MCP_AUTH_AUDIENCE__": os.environ.get("MCP_AUTH_AUDIENCE", ""),
@@ -214,13 +245,6 @@ jobs:
           rendered_path = Path("deploy/ecs/task-definition.rendered.json")
           task_definition = json.loads(template_path.read_text(encoding="utf-8"))
           rendered_task_definition = replace_placeholders(task_definition, replacements)
-          if not os.environ.get("DOTLOOP_ACCESS_TOKEN_SECRET_ARN"):
-              for container in rendered_task_definition.get("containerDefinitions", []):
-                  container["secrets"] = [
-                      secret
-                      for secret in container.get("secrets", [])
-                      if secret.get("name") != "DOTLOOP_ACCESS_TOKEN"
-                  ]
           rendered_text = json.dumps(rendered_task_definition, indent=2) + "\n"
           missing = sorted(set(re.findall(r"__[A-Z0-9_]+__", rendered_text)))
           if missing:

@@ -131,6 +131,20 @@ def _read_required_auth_url(name: str) -> str:
     return _normalize_public_http_url(name, raw_value)
 
 
+def _read_required_dotloop_app_url(name: str, default: str | None = None) -> str:
+    raw_value = os.getenv(name) or default
+    if not raw_value:
+        raise DotloopConfigurationError(f"{name} is required when Dotloop app OAuth is enabled.")
+    return _normalize_public_http_url(name, raw_value)
+
+
+def _read_required_secret(name: str) -> str:
+    value = (os.getenv(name) or "").strip()
+    if not value:
+        raise DotloopConfigurationError(f"{name} is required when Dotloop app OAuth is enabled.")
+    return value
+
+
 @dataclass(frozen=True)
 class DotloopSettings:
     """Settings used to construct the local Dotloop API client."""
@@ -161,6 +175,57 @@ class DotloopSettings:
             )
         return cls(
             access_token=access_token,
+            base_url=os.getenv("DOTLOOP_BASE_URL", cls.base_url),
+            timeout=_read_int("DOTLOOP_TIMEOUT_SECONDS", cls.timeout),
+        )
+
+
+@dataclass(frozen=True)
+class DotloopAppOAuthSettings:
+    """Settings for Dotloop API app OAuth and hosted token storage."""
+
+    enabled: bool = False
+    client_id: str | None = None
+    client_secret: str | None = None
+    authorize_url: str = "https://auth.dotloop.com/oauth/authorize"
+    token_url: str = "https://auth.dotloop.com/oauth/token"
+    redirect_url: str | None = None
+    token_secret_arn: str | None = None
+    token_refresh_leeway_seconds: int = 300
+    token_request_timeout_seconds: int = 15
+    base_url: str = DotloopSettings.base_url
+    timeout: int = DotloopSettings.timeout
+
+    @classmethod
+    def from_env(cls, env_file: str | Path | None = None) -> DotloopAppOAuthSettings:
+        """Load Dotloop app OAuth settings from local environment variables."""
+        load_dotloop_env_file(env_file)
+        enabled = _read_bool("DOTLOOP_APP_OAUTH_ENABLED", False)
+        if not enabled:
+            return cls()
+
+        return cls(
+            enabled=True,
+            client_id=_read_required_secret("DOTLOOP_API_CLIENT_ID"),
+            client_secret=_read_required_secret("DOTLOOP_API_SECRET"),
+            authorize_url=_read_required_dotloop_app_url(
+                "DOTLOOP_APP_OAUTH_AUTHORIZE_URL",
+                cls.authorize_url,
+            ),
+            token_url=_read_required_dotloop_app_url(
+                "DOTLOOP_APP_OAUTH_TOKEN_URL",
+                cls.token_url,
+            ),
+            redirect_url=_read_required_dotloop_app_url("DOTLOOP_APP_OAUTH_REDIRECT_URL"),
+            token_secret_arn=_read_required_secret("DOTLOOP_APP_OAUTH_TOKEN_SECRET_ARN"),
+            token_refresh_leeway_seconds=_read_non_negative_int(
+                "DOTLOOP_APP_OAUTH_TOKEN_REFRESH_LEEWAY_SECONDS",
+                cls.token_refresh_leeway_seconds,
+            ),
+            token_request_timeout_seconds=_read_int(
+                "DOTLOOP_APP_OAUTH_TOKEN_REQUEST_TIMEOUT_SECONDS",
+                cls.token_request_timeout_seconds,
+            ),
             base_url=os.getenv("DOTLOOP_BASE_URL", cls.base_url),
             timeout=_read_int("DOTLOOP_TIMEOUT_SECONDS", cls.timeout),
         )
@@ -262,6 +327,9 @@ class DotloopServerSettings:
     streamable_http_path: str = "/mcp"
     log_level: str = "INFO"
     allow_missing_access_token: bool = False
+    battle_fixture_mode: bool = False
+    battle_record_path: str | None = None
+    app_oauth: DotloopAppOAuthSettings = field(default_factory=DotloopAppOAuthSettings)
     mcp_auth: DotloopMcpAuthSettings = field(default_factory=DotloopMcpAuthSettings)
     hosted_oauth: DotloopHostedOAuthSettings = field(default_factory=DotloopHostedOAuthSettings)
 
@@ -286,6 +354,11 @@ class DotloopServerSettings:
                 "DOTLOOP_TRANSPORT must be either 'stdio' or 'streamable-http'."
             )
         transport = cast(Literal["stdio", "streamable-http"], raw_transport)
+        battle_fixture_mode = _read_bool("DOTLOOP_BATTLE_FIXTURE_MODE", False)
+        if battle_fixture_mode and os.getenv("DOTLOOP_RUN_LIVE_TESTS") == "1":
+            raise DotloopConfigurationError(
+                "DOTLOOP_BATTLE_FIXTURE_MODE cannot be combined with DOTLOOP_RUN_LIVE_TESTS=1."
+            )
         return cls(
             transport=transport,
             host=os.getenv("DOTLOOP_HOST", cls.host),
@@ -296,6 +369,9 @@ class DotloopServerSettings:
             ),
             log_level=os.getenv("DOTLOOP_LOG_LEVEL", cls.log_level).upper(),
             allow_missing_access_token=_read_bool("DOTLOOP_ALLOW_MISSING_ACCESS_TOKEN", False),
+            battle_fixture_mode=battle_fixture_mode,
+            battle_record_path=os.getenv("DOTLOOP_BATTLE_RECORD_PATH") or None,
+            app_oauth=DotloopAppOAuthSettings.from_env(env_file),
             mcp_auth=DotloopMcpAuthSettings.from_env(env_file),
             hosted_oauth=DotloopHostedOAuthSettings.from_env(env_file),
         )

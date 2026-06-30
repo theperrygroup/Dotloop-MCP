@@ -8,7 +8,10 @@ from typing import Any, Literal, cast
 from dotloop import DotloopClient
 from starlette.applications import Starlette
 
+from dotloop_mcp.app_oauth import build_dotloop_app_credential_provider
 from dotloop_mcp.auth import DotloopMcpJwtVerifier, build_mcp_auth_settings
+from dotloop_mcp.battle_fixtures import BattleFixtureDotloopClient
+from dotloop_mcp.battle_recording import ToolCallRecorder
 from dotloop_mcp.config import DotloopConfigurationError, DotloopServerSettings, DotloopSettings
 from dotloop_mcp.hosted_oauth import DotloopHostedOAuthApplication
 from dotloop_mcp.logging import configure_logging
@@ -68,26 +71,38 @@ def create_server(
     resolved_server_settings = server_settings or DotloopServerSettings.from_env()
     configure_logging(resolved_server_settings.log_level)
 
+    dotloop_credential_provider = None
     if service is None:
-        if client is None:
-            try:
-                resolved_settings = settings or DotloopSettings.from_env()
-            except DotloopConfigurationError:
-                if not resolved_server_settings.allow_missing_access_token:
-                    raise
-                service = UnavailableDotloopService(
-                    "Dotloop access token is not configured for this hosted MCP deployment."
+        if resolved_server_settings.battle_fixture_mode:
+            service = DotloopService(BattleFixtureDotloopClient())
+        elif client is None:
+            if resolved_server_settings.app_oauth.enabled:
+                dotloop_credential_provider = build_dotloop_app_credential_provider(
+                    resolved_server_settings.app_oauth
                 )
+                client = dotloop_credential_provider.build_client_factory()
             else:
-                client = DotloopClient(
-                    api_key=resolved_settings.access_token,
-                    base_url=resolved_settings.base_url,
-                    timeout=resolved_settings.timeout,
-                )
+                try:
+                    resolved_settings = settings or DotloopSettings.from_env()
+                except DotloopConfigurationError:
+                    if not resolved_server_settings.allow_missing_access_token:
+                        raise
+                    service = UnavailableDotloopService(
+                        "Dotloop access token is not configured for this hosted MCP deployment."
+                    )
+                else:
+                    client = DotloopClient(
+                        api_key=resolved_settings.access_token,
+                        base_url=resolved_settings.base_url,
+                        timeout=resolved_settings.timeout,
+                    )
         if service is None:
             service = DotloopService(client)
 
-    adapter = DotloopToolAdapter(service)
+    adapter = DotloopToolAdapter(
+        service,
+        recorder=ToolCallRecorder.from_path(resolved_server_settings.battle_record_path),
+    )
     mcp_auth = resolved_server_settings.mcp_auth
     auth_settings = build_mcp_auth_settings(mcp_auth) if mcp_auth.enabled else None
     resolved_token_verifier = None
@@ -97,6 +112,7 @@ def create_server(
             hosted_oauth_application = DotloopHostedOAuthApplication(
                 auth_settings=mcp_auth,
                 hosted_settings=resolved_server_settings.hosted_oauth,
+                dotloop_credential_provider=dotloop_credential_provider,
             )
             resolved_token_verifier = token_verifier or hosted_oauth_application.token_verifier()
         else:

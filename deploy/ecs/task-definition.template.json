@@ -60,7 +60,43 @@
         },
         {
           "name": "DOTLOOP_ALLOW_MISSING_ACCESS_TOKEN",
+          "value": "0"
+        },
+        {
+          "name": "DOTLOOP_BATTLE_FIXTURE_MODE",
+          "value": "__DOTLOOP_BATTLE_FIXTURE_MODE__"
+        },
+        {
+          "name": "DOTLOOP_BATTLE_RECORD_PATH",
+          "value": "__DOTLOOP_BATTLE_RECORD_PATH__"
+        },
+        {
+          "name": "DOTLOOP_APP_OAUTH_ENABLED",
           "value": "1"
+        },
+        {
+          "name": "DOTLOOP_APP_OAUTH_AUTHORIZE_URL",
+          "value": "https://auth.dotloop.com/oauth/authorize"
+        },
+        {
+          "name": "DOTLOOP_APP_OAUTH_TOKEN_URL",
+          "value": "https://auth.dotloop.com/oauth/token"
+        },
+        {
+          "name": "DOTLOOP_APP_OAUTH_REDIRECT_URL",
+          "value": "__DOTLOOP_APP_OAUTH_REDIRECT_URL__"
+        },
+        {
+          "name": "DOTLOOP_APP_OAUTH_TOKEN_SECRET_ARN",
+          "value": "__DOTLOOP_APP_OAUTH_TOKEN_SECRET_ARN__"
+        },
+        {
+          "name": "DOTLOOP_APP_OAUTH_TOKEN_REFRESH_LEEWAY_SECONDS",
+          "value": "300"
+        },
+        {
+          "name": "DOTLOOP_APP_OAUTH_TOKEN_REQUEST_TIMEOUT_SECONDS",
+          "value": "15"
         },
         {
           "name": "DOTLOOP_MCP_AUTH_ENABLED",
@@ -72,7 +108,7 @@
         },
         {
           "name": "DOTLOOP_MCP_HOSTED_OAUTH_PUBLIC_CONSENT_ENABLED",
-          "value": "1"
+          "value": "0"
         },
         {
           "name": "DOTLOOP_MCP_AUTH_ISSUER_URL",
@@ -109,8 +145,12 @@
       ],
       "secrets": [
         {
-          "name": "DOTLOOP_ACCESS_TOKEN",
-          "valueFrom": "__DOTLOOP_ACCESS_TOKEN_SECRET_ARN__"
+          "name": "DOTLOOP_API_CLIENT_ID",
+          "valueFrom": "__DOTLOOP_API_CLIENT_ID_SECRET_ARN__"
+        },
+        {
+          "name": "DOTLOOP_API_SECRET",
+          "valueFrom": "__DOTLOOP_API_SECRET_SECRET_ARN__"
         }
       ],
       "logConfiguration": {

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
+import anyio
 import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.algorithms import RSAAlgorithm
@@ -18,6 +19,11 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.routing import Route
 
+from dotloop_mcp.app_oauth import (
+    DotloopAppCredentialProvider,
+    DotloopAppOAuthError,
+    DotloopAppOAuthRequiredError,
+)
 from dotloop_mcp.auth import DotloopMcpJwtVerifier
 from dotloop_mcp.config import (
     DotloopConfigurationError,
@@ -42,6 +48,17 @@ class _AuthorizationCode:
     scopes: tuple[str, ...]
     code_challenge: str
     code_challenge_method: str
+    expires_at: int
+
+
+@dataclass(frozen=True)
+class _PendingDotloopAuthorization:
+    client_id: str
+    redirect_uri: str
+    scopes: tuple[str, ...]
+    code_challenge: str
+    code_challenge_method: str
+    state: str | None
     expires_at: int
 
 
@@ -74,6 +91,7 @@ class DotloopHostedOAuthApplication:
         *,
         auth_settings: DotloopMcpAuthSettings,
         hosted_settings: DotloopHostedOAuthSettings,
+        dotloop_credential_provider: DotloopAppCredentialProvider | None = None,
         private_key: rsa.RSAPrivateKey | None = None,
         time_provider: Any | None = None,
     ) -> None:
@@ -85,6 +103,7 @@ class DotloopHostedOAuthApplication:
 
         self._auth_settings = auth_settings
         self._hosted_settings = hosted_settings
+        self._dotloop_credential_provider = dotloop_credential_provider
         self._private_key = private_key or rsa.generate_private_key(
             public_exponent=65537,
             key_size=2048,
@@ -93,6 +112,7 @@ class DotloopHostedOAuthApplication:
         self._time_provider = time_provider or (lambda: int(time.time()))
         self._clients: dict[str, _ClientRegistration] = {}
         self._authorization_codes: dict[str, _AuthorizationCode] = {}
+        self._pending_dotloop_authorizations: dict[str, _PendingDotloopAuthorization] = {}
         self._refresh_tokens: dict[str, _RefreshToken] = {}
 
     @property
@@ -123,6 +143,7 @@ class DotloopHostedOAuthApplication:
             Route("/.well-known/jwks.json", self.jwks),
             Route("/oauth/register", self.register_client, methods=["POST"]),
             Route("/oauth/authorize", self.authorize, methods=["GET", "POST"]),
+            Route("/oauth/dotloop/callback", self.dotloop_callback, methods=["GET"]),
             Route("/oauth/token", self.token, methods=["POST"]),
         )
 
@@ -192,7 +213,10 @@ class DotloopHostedOAuthApplication:
 
     async def authorize(self, request: Request) -> Response:
         """Validate an authorization request and redirect with a short-lived code."""
-        if not self._hosted_settings.public_consent_enabled:
+        if (
+            not self._hosted_settings.public_consent_enabled
+            and self._dotloop_credential_provider is None
+        ):
             return HTMLResponse(
                 _html_page(
                     "Dotloop MCP authorization is not enabled for this deployment.",
@@ -210,19 +234,144 @@ class DotloopHostedOAuthApplication:
         client_id = params["client_id"]
         redirect_uri = params["redirect_uri"]
         scopes = _requested_scopes(params.get("scope"), self._clients[client_id].scopes)
+        code_challenge = params["code_challenge"]
+        code_challenge_method = params.get("code_challenge_method") or "plain"
+        state = params.get("state")
+
+        if self._dotloop_credential_provider is not None:
+            try:
+                await anyio.to_thread.run_sync(self._dotloop_credential_provider.get_access_token)
+            except DotloopAppOAuthRequiredError:
+                return self._start_dotloop_authorization(
+                    client_id=client_id,
+                    redirect_uri=redirect_uri,
+                    scopes=scopes,
+                    code_challenge=code_challenge,
+                    code_challenge_method=code_challenge_method,
+                    state=state,
+                )
+            except DotloopAppOAuthError:
+                return HTMLResponse(
+                    _html_page(
+                        "Dotloop authorization is temporarily unavailable.",
+                        "The hosted MCP could not access its Dotloop token store. Try again later.",
+                    ),
+                    status_code=503,
+                )
+
+        return self._issue_authorization_code_redirect(
+            client_id=client_id,
+            redirect_uri=redirect_uri,
+            scopes=scopes,
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
+            state=state,
+        )
+
+    async def dotloop_callback(self, request: Request) -> Response:
+        """Handle Dotloop's OAuth callback and resume the pending MCP flow."""
+        dotloop_credential_provider = self._dotloop_credential_provider
+        if dotloop_credential_provider is None:
+            return _oauth_error("invalid_request", "Dotloop app OAuth is not enabled.", 400)
+
+        params = {key: value for key, value in request.query_params.items()}
+        if params.get("error"):
+            return HTMLResponse(
+                _html_page(
+                    "Dotloop authorization was not completed.",
+                    "Start the MCP connector flow again to connect Dotloop.",
+                ),
+                status_code=400,
+            )
+
+        code = params.get("code")
+        state = params.get("state")
+        if not code or not state:
+            return _oauth_error("invalid_request", "Missing Dotloop callback parameters.", 400)
+
+        pending_authorization = self._pending_dotloop_authorizations.pop(state, None)
+        if pending_authorization is None or pending_authorization.expires_at < self._now():
+            return HTMLResponse(
+                _html_page(
+                    "Dotloop authorization session expired.",
+                    "Start the MCP connector flow again to connect Dotloop.",
+                ),
+                status_code=400,
+            )
+
+        try:
+            await anyio.to_thread.run_sync(
+                lambda: dotloop_credential_provider.exchange_authorization_code(code=code)
+            )
+        except DotloopAppOAuthError:
+            return HTMLResponse(
+                _html_page(
+                    "Dotloop authorization failed.",
+                    "Start the MCP connector flow again to connect Dotloop.",
+                ),
+                status_code=400,
+            )
+
+        return self._issue_authorization_code_redirect(
+            client_id=pending_authorization.client_id,
+            redirect_uri=pending_authorization.redirect_uri,
+            scopes=pending_authorization.scopes,
+            code_challenge=pending_authorization.code_challenge,
+            code_challenge_method=pending_authorization.code_challenge_method,
+            state=pending_authorization.state,
+        )
+
+    def _start_dotloop_authorization(
+        self,
+        *,
+        client_id: str,
+        redirect_uri: str,
+        scopes: tuple[str, ...],
+        code_challenge: str,
+        code_challenge_method: str,
+        state: str | None,
+    ) -> RedirectResponse:
+        if self._dotloop_credential_provider is None:
+            raise DotloopConfigurationError("Dotloop app OAuth is not enabled.")
+
+        dotloop_state = secrets.token_urlsafe(32)
+        self._pending_dotloop_authorizations[dotloop_state] = _PendingDotloopAuthorization(
+            client_id=client_id,
+            redirect_uri=redirect_uri,
+            scopes=scopes,
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
+            state=state,
+            expires_at=self._now() + self._hosted_settings.authorization_code_seconds,
+        )
+        return RedirectResponse(
+            self._dotloop_credential_provider.authorization_url(state=dotloop_state),
+            status_code=302,
+        )
+
+    def _issue_authorization_code_redirect(
+        self,
+        *,
+        client_id: str,
+        redirect_uri: str,
+        scopes: tuple[str, ...],
+        code_challenge: str,
+        code_challenge_method: str,
+        state: str | None,
+    ) -> RedirectResponse:
         code = secrets.token_urlsafe(32)
         self._authorization_codes[code] = _AuthorizationCode(
             client_id=client_id,
             redirect_uri=redirect_uri,
             scopes=scopes,
-            code_challenge=params["code_challenge"],
-            code_challenge_method=params.get("code_challenge_method") or "plain",
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
             expires_at=self._now() + self._hosted_settings.authorization_code_seconds,
         )
 
         redirect_params = {"code": code}
-        if params.get("state"):
-            redirect_params["state"] = params["state"]
+        if state:
+            redirect_params["state"] = state
         return RedirectResponse(
             _append_query_params(redirect_uri, redirect_params),
             status_code=302,

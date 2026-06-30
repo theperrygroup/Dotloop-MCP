@@ -10,7 +10,17 @@ import httpx
 import pytest
 from starlette.applications import Starlette
 
-from dotloop_mcp.config import DotloopHostedOAuthSettings, DotloopMcpAuthSettings
+from dotloop_mcp.app_oauth import (
+    DotloopApiToken,
+    DotloopAppCredentialProvider,
+    DotloopAppOAuthClient,
+    InMemoryDotloopApiTokenStore,
+)
+from dotloop_mcp.config import (
+    DotloopAppOAuthSettings,
+    DotloopHostedOAuthSettings,
+    DotloopMcpAuthSettings,
+)
 from dotloop_mcp.hosted_oauth import DotloopHostedOAuthApplication
 
 
@@ -31,6 +41,38 @@ def _hosted_settings(*, public_consent: bool = True) -> DotloopHostedOAuthSettin
         authorization_code_seconds=300,
         access_token_seconds=3600,
         refresh_token_seconds=3600,
+    )
+
+
+def _dotloop_app_settings() -> DotloopAppOAuthSettings:
+    return DotloopAppOAuthSettings(
+        enabled=True,
+        client_id="dotloop-client-id",
+        client_secret="dotloop-client-secret",
+        authorize_url="https://auth.dotloop.com/oauth/authorize",
+        token_url="https://auth.dotloop.com/oauth/token",
+        redirect_url="http://127.0.0.1:8000/oauth/dotloop/callback",
+        token_secret_arn="secret-id",
+        token_refresh_leeway_seconds=60,
+        token_request_timeout_seconds=5,
+    )
+
+
+def _dotloop_provider(
+    *,
+    token: DotloopApiToken | None = None,
+    http_client: httpx.Client | None = None,
+) -> DotloopAppCredentialProvider:
+    settings = _dotloop_app_settings()
+    return DotloopAppCredentialProvider(
+        settings=settings,
+        store=InMemoryDotloopApiTokenStore(token),
+        oauth_client=DotloopAppOAuthClient(
+            settings=settings,
+            http_client=http_client,
+            time_provider=lambda: 100,
+        ),
+        time_provider=lambda: 100,
     )
 
 
@@ -159,3 +201,151 @@ async def test_hosted_oauth_public_consent_gate() -> None:
 
     assert response.status_code == 403
     assert "authorization is not enabled" in response.text
+
+
+@pytest.mark.asyncio
+async def test_hosted_oauth_redirects_to_dotloop_when_api_token_missing() -> None:
+    application = DotloopHostedOAuthApplication(
+        auth_settings=_auth_settings(),
+        hosted_settings=_hosted_settings(public_consent=False),
+        dotloop_credential_provider=_dotloop_provider(),
+    )
+    redirect_uri = "http://127.0.0.1:7777/callback"
+    async with _client(application) as client:
+        register_response = await client.post(
+            "/oauth/register",
+            json={"redirect_uris": [redirect_uri], "scope": "dotloop:read"},
+        )
+        client_id = register_response.json()["client_id"]
+
+        response = await client.get(
+            "/oauth/authorize",
+            params={
+                "response_type": "code",
+                "client_id": client_id,
+                "redirect_uri": redirect_uri,
+                "code_challenge": "challenge",
+                "scope": "dotloop:read",
+                "state": "mcp-state",
+            },
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 302
+    redirect = response.headers["location"]
+    parsed_redirect = urlsplit(redirect)
+    query = parse_qs(parsed_redirect.query)
+    assert parsed_redirect.scheme == "https"
+    assert parsed_redirect.netloc == "auth.dotloop.com"
+    assert parsed_redirect.path == "/oauth/authorize"
+    assert query["client_id"] == ["dotloop-client-id"]
+    assert query["redirect_uri"] == ["http://127.0.0.1:8000/oauth/dotloop/callback"]
+    assert query["state"][0]
+
+
+@pytest.mark.asyncio
+async def test_hosted_oauth_dotloop_callback_resumes_mcp_authorization() -> None:
+    def token_handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["grant_type"] == "authorization_code"
+        assert request.url.params["code"] == "dotloop-code"
+        return httpx.Response(
+            200,
+            json={
+                "access_token": "dotloop-access",
+                "refresh_token": "dotloop-refresh",
+                "expires_in": 3600,
+            },
+        )
+
+    application = DotloopHostedOAuthApplication(
+        auth_settings=_auth_settings(),
+        hosted_settings=_hosted_settings(public_consent=False),
+        dotloop_credential_provider=_dotloop_provider(
+            http_client=httpx.Client(transport=httpx.MockTransport(token_handler))
+        ),
+    )
+    redirect_uri = "http://127.0.0.1:7777/callback"
+    async with _client(application) as client:
+        register_response = await client.post(
+            "/oauth/register",
+            json={"redirect_uris": [redirect_uri], "scope": "dotloop:read"},
+        )
+        client_id = register_response.json()["client_id"]
+        verifier = "test-verifier"
+        authorize_response = await client.get(
+            "/oauth/authorize",
+            params={
+                "response_type": "code",
+                "client_id": client_id,
+                "redirect_uri": redirect_uri,
+                "code_challenge": _pkce_challenge(verifier),
+                "code_challenge_method": "S256",
+                "scope": "dotloop:read",
+                "state": "mcp-state",
+            },
+            follow_redirects=False,
+        )
+        dotloop_state = parse_qs(urlsplit(authorize_response.headers["location"]).query)["state"][0]
+
+        callback_response = await client.get(
+            "/oauth/dotloop/callback",
+            params={"code": "dotloop-code", "state": dotloop_state},
+            follow_redirects=False,
+        )
+        callback_query = parse_qs(urlsplit(callback_response.headers["location"]).query)
+        token_response = await client.post(
+            "/oauth/token",
+            data={
+                "grant_type": "authorization_code",
+                "client_id": client_id,
+                "redirect_uri": redirect_uri,
+                "code": callback_query["code"][0],
+                "code_verifier": verifier,
+            },
+        )
+
+    assert callback_response.status_code == 302
+    assert callback_query["state"] == ["mcp-state"]
+    assert token_response.status_code == 200
+    assert token_response.json()["token_type"] == "Bearer"
+
+
+@pytest.mark.asyncio
+async def test_hosted_oauth_valid_dotloop_token_skips_dotloop_redirect() -> None:
+    application = DotloopHostedOAuthApplication(
+        auth_settings=_auth_settings(),
+        hosted_settings=_hosted_settings(public_consent=False),
+        dotloop_credential_provider=_dotloop_provider(
+            token=DotloopApiToken(
+                access_token="dotloop-access",
+                refresh_token="dotloop-refresh",
+                expires_at=1_000,
+            )
+        ),
+    )
+    redirect_uri = "http://127.0.0.1:7777/callback"
+    async with _client(application) as client:
+        register_response = await client.post(
+            "/oauth/register",
+            json={"redirect_uris": [redirect_uri], "scope": "dotloop:read"},
+        )
+        client_id = register_response.json()["client_id"]
+        response = await client.get(
+            "/oauth/authorize",
+            params={
+                "response_type": "code",
+                "client_id": client_id,
+                "redirect_uri": redirect_uri,
+                "code_challenge": "challenge",
+                "scope": "dotloop:read",
+                "state": "mcp-state",
+            },
+            follow_redirects=False,
+        )
+
+    parsed_redirect = urlsplit(response.headers["location"])
+    query = parse_qs(parsed_redirect.query)
+    assert response.status_code == 302
+    assert parsed_redirect.netloc == "127.0.0.1:7777"
+    assert query["code"][0]
+    assert query["state"] == ["mcp-state"]

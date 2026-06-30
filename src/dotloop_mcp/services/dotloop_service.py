@@ -15,13 +15,22 @@ from dotloop_mcp.models.common import JsonObject, to_json_object
 class DotloopService:
     """Read-first service adapter around a `dotloop.DotloopClient`-like object."""
 
-    def __init__(self, client: Any) -> None:
+    def __init__(self, client: Any | Callable[[], Any]) -> None:
         """Initialize the service.
 
         Args:
-            client: Dotloop client or test double exposing the expected domains.
+            client: Dotloop client, client factory, or test double exposing the
+                expected domains.
         """
-        self._client = client
+        self._client_factory = client if callable(client) else None
+        self._static_client = None if callable(client) else client
+
+    @property
+    def _client(self) -> Any:
+        """Return the current Dotloop client."""
+        if self._client_factory is not None:
+            return self._client_factory()
+        return self._static_client
 
     async def _call_json(self, operation: Callable[[], object]) -> JsonObject:
         try:
