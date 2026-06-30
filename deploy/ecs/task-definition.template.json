@@ -1,0 +1,114 @@
+{
+  "family": "dotloop-mcp-hosted",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "__TASK_EXECUTION_ROLE_ARN__",
+  "taskRoleArn": "__TASK_ROLE_ARN__",
+  "containerDefinitions": [
+    {
+      "name": "dotloop-mcp-hosted",
+      "image": "__IMAGE_URI__",
+      "essential": true,
+      "command": [
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--path",
+        "/mcp"
+      ],
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp",
+          "appProtocol": "http"
+        }
+      ],
+      "environment": [
+        {
+          "name": "DOTLOOP_TRANSPORT",
+          "value": "streamable-http"
+        },
+        {
+          "name": "DOTLOOP_HOST",
+          "value": "0.0.0.0"
+        },
+        {
+          "name": "DOTLOOP_PORT",
+          "value": "8000"
+        },
+        {
+          "name": "DOTLOOP_STREAMABLE_HTTP_PATH",
+          "value": "/mcp"
+        },
+        {
+          "name": "DOTLOOP_LOG_LEVEL",
+          "value": "INFO"
+        },
+        {
+          "name": "DOTLOOP_BASE_URL",
+          "value": "https://api-gateway.dotloop.com/public/v2"
+        },
+        {
+          "name": "DOTLOOP_TIMEOUT_SECONDS",
+          "value": "30"
+        },
+        {
+          "name": "DOTLOOP_MCP_AUTH_ENABLED",
+          "value": "1"
+        },
+        {
+          "name": "DOTLOOP_MCP_AUTH_ISSUER_URL",
+          "value": "__MCP_AUTH_ISSUER_URL__"
+        },
+        {
+          "name": "DOTLOOP_MCP_AUTH_RESOURCE_SERVER_URL",
+          "value": "__MCP_AUTH_RESOURCE_SERVER_URL__"
+        },
+        {
+          "name": "DOTLOOP_MCP_AUTH_JWKS_URL",
+          "value": "__MCP_AUTH_JWKS_URL__"
+        },
+        {
+          "name": "DOTLOOP_MCP_AUTH_REQUIRED_SCOPES",
+          "value": "__MCP_AUTH_REQUIRED_SCOPES__"
+        },
+        {
+          "name": "DOTLOOP_MCP_AUTH_AUDIENCE",
+          "value": "__MCP_AUTH_AUDIENCE__"
+        },
+        {
+          "name": "DOTLOOP_MCP_AUTH_ALLOWED_ALGORITHMS",
+          "value": "RS256"
+        },
+        {
+          "name": "DOTLOOP_MCP_AUTH_TOKEN_LEEWAY_SECONDS",
+          "value": "30"
+        },
+        {
+          "name": "DOTLOOP_MCP_AUTH_JWKS_CACHE_SECONDS",
+          "value": "300"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "DOTLOOP_ACCESS_TOKEN",
+          "valueFrom": "__DOTLOOP_ACCESS_TOKEN_SECRET_ARN__"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "__LOG_GROUP_NAME__",
+          "awslogs-region": "__AWS_REGION__",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

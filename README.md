@@ -47,6 +47,57 @@ uv run python -m dotloop_mcp.cli stdio
 uv run python -m dotloop_mcp.cli streamable-http --host 127.0.0.1 --port 8000 --path /mcp
 ```
 
+## Authenticate the MCP URL
+
+Streamable HTTP can be protected as an MCP OAuth resource server. The server
+does not issue tokens; configure an external OAuth/OIDC issuer and JWKS URL,
+then clients must send `Authorization: Bearer <token>` on every MCP HTTP
+request. Tokens in URL query strings are not supported.
+
+```bash
+export DOTLOOP_TRANSPORT=streamable-http
+export DOTLOOP_MCP_AUTH_ENABLED=1
+export DOTLOOP_MCP_AUTH_ISSUER_URL="https://auth.example.com"
+export DOTLOOP_MCP_AUTH_RESOURCE_SERVER_URL="https://dotloop-mcp.example.com/mcp"
+export DOTLOOP_MCP_AUTH_JWKS_URL="https://auth.example.com/.well-known/jwks.json"
+export DOTLOOP_MCP_AUTH_REQUIRED_SCOPES="dotloop:read"
+```
+
+`DOTLOOP_MCP_AUTH_RESOURCE_SERVER_URL` is the public MCP endpoint URL clients
+authenticate for. It is also used for protected-resource metadata discovery.
+Set `DOTLOOP_MCP_AUTH_AUDIENCE` only when the issuer uses a separate JWT
+audience value. Stdio transport is unchanged and should continue to load local
+credentials from the environment.
+
+## Hosted Staging Deployment
+
+Dotloop staging is designed to run as a Docker image with the
+`dotloop-mcp-hosted` entrypoint on ECS/Fargate behind
+an HTTPS load balancer, with the public MCP endpoint expected at:
+
+```text
+https://dotloop.theperry.group/mcp
+```
+
+The hosted entrypoint is streamable HTTP only and requires inbound MCP URL auth:
+
+```bash
+DOTLOOP_TRANSPORT=streamable-http
+DOTLOOP_HOST=0.0.0.0
+DOTLOOP_PORT=8000
+DOTLOOP_STREAMABLE_HTTP_PATH=/mcp
+DOTLOOP_MCP_AUTH_ENABLED=1
+DOTLOOP_MCP_AUTH_ISSUER_URL=https://dotloop.theperry.group
+DOTLOOP_MCP_AUTH_RESOURCE_SERVER_URL=https://dotloop.theperry.group/mcp
+DOTLOOP_MCP_AUTH_JWKS_URL=https://auth.example.com/.well-known/jwks.json
+```
+
+Deployment assets live under `deploy/ecs/`. The staging GitHub Actions workflow
+is `.github/workflows/deploy-staging.yml`; it validates the repo, builds and
+pushes a multi-architecture ECR image, renders the ECS task definition, updates
+the configured ECS service, and waits for stability. DNS should point
+`dotloop.theperry.group` at the public load balancer before enabling client use.
+
 ## Validate
 
 ```bash

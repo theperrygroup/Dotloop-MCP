@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help sync docs-check format-check lint typecheck test coverage cli-help live-readiness-check live-read-check live-identity-check validate
+.PHONY: help sync docs-check format-check lint typecheck test coverage cli-help live-readiness-check live-read-check live-identity-check validate build build-smoke release-validate
 
 help:
 	@printf "%s\n" \
@@ -15,7 +15,10 @@ help:
 		"make live-readiness-check Report non-secret live read readiness" \
 		"make live-read-check  Run optional live read smoke checks" \
 		"make live-identity-check Alias for live-read-check" \
-		"make validate         Run the local validation stack"
+		"make validate         Run the local validation stack" \
+		"make build            Build sdist and wheel artifacts" \
+		"make build-smoke      Build artifacts and validate wheel install/CLI" \
+		"make release-validate Run validation plus build smoke checks"
 
 sync:
 	uv sync --frozen
@@ -61,3 +64,13 @@ validate:
 	$(MAKE) test
 	$(MAKE) coverage
 	$(MAKE) cli-help
+
+build:
+	uv build --clear
+
+build-smoke: build
+	uv run python scripts/validate_build_artifacts.py
+
+release-validate:
+	$(MAKE) validate
+	$(MAKE) build-smoke

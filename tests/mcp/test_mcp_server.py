@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import anyio
+import httpx
 import pytest
 from pydantic import AnyUrl
 from tests.conftest import FakeDotloopClient
@@ -288,6 +289,70 @@ async def test_streamable_http_client_can_list_and_call_representative_tool() ->
         assert "dotloop_get_account" in tool_names
         assert isinstance(method_coverage_content, TextResourceContents)
         assert "Dotloop Library Method Coverage" in method_coverage_content.text
+        assert result.structuredContent == {"result": {"data": {"id": 1, "firstName": "Ada"}}}
+    finally:
+        process.terminate()
+        with suppress(subprocess.TimeoutExpired):
+            process.communicate(timeout=5)
+        if process.poll() is None:
+            process.kill()
+            process.communicate(timeout=5)
+
+
+@pytest.mark.asyncio
+async def test_streamable_http_auth_requires_bearer_and_allows_valid_client() -> None:
+    port = _unused_local_port()
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "tests.mcp.fake_streamable_http_server",
+            "--port",
+            str(port),
+            "--auth",
+        ],
+        cwd=Path.cwd(),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    try:
+        await _wait_for_local_port(port)
+        async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{port}") as unauthenticated_client:
+            response = await unauthenticated_client.post(
+                "/mcp",
+                json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+                headers={"Accept": "application/json, text/event-stream"},
+            )
+            metadata_response = await unauthenticated_client.get(
+                "/.well-known/oauth-protected-resource/mcp"
+            )
+
+        assert response.status_code == 401
+        assert "resource_metadata=" in response.headers["www-authenticate"]
+        assert metadata_response.status_code == 200
+        metadata = metadata_response.json()
+        assert metadata["resource"] == f"http://127.0.0.1:{port}/mcp"
+        assert metadata["authorization_servers"] == [f"http://127.0.0.1:{port}/auth"]
+        assert metadata["scopes_supported"] == ["dotloop:read"]
+
+        async with httpx.AsyncClient(
+            headers={"Authorization": "Bearer good-token"},
+        ) as authenticated_client:
+            async with streamable_http_client(
+                f"http://127.0.0.1:{port}/mcp",
+                http_client=authenticated_client,
+            ) as (
+                read_stream,
+                write_stream,
+                _get_session_id,
+            ):
+                async with ClientSession(read_stream, write_stream) as session:
+                    await session.initialize()
+                    tools = await session.list_tools()
+                    result = await session.call_tool("dotloop_get_account", {})
+
+        assert "dotloop_get_account" in {tool.name for tool in tools.tools}
         assert result.structuredContent == {"result": {"data": {"id": 1, "firstName": "Ada"}}}
     finally:
         process.terminate()

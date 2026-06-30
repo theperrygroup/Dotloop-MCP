@@ -25,6 +25,7 @@ from tests.conftest import FakeDotloopClient
 
 from dotloop_mcp.config import (
     DotloopConfigurationError,
+    DotloopMcpAuthSettings,
     DotloopServerSettings,
     DotloopSettings,
 )
@@ -152,6 +153,88 @@ def test_server_settings_validates_transport(monkeypatch: pytest.MonkeyPatch) ->
 
     with pytest.raises(DotloopConfigurationError, match="DOTLOOP_TRANSPORT"):
         DotloopServerSettings.from_env()
+
+
+def test_mcp_auth_settings_disabled_by_default() -> None:
+    settings = DotloopMcpAuthSettings.from_env()
+
+    assert settings.enabled is False
+    assert settings.required_scopes == ("dotloop:read",)
+
+
+def test_mcp_auth_settings_requires_urls_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DOTLOOP_MCP_AUTH_ENABLED", "1")
+
+    with pytest.raises(DotloopConfigurationError, match="DOTLOOP_MCP_AUTH_ISSUER_URL"):
+        DotloopMcpAuthSettings.from_env()
+
+
+def test_mcp_auth_settings_loads_and_normalizes_urls(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DOTLOOP_MCP_AUTH_ENABLED", "true")
+    monkeypatch.setenv("DOTLOOP_MCP_AUTH_ISSUER_URL", "https://Auth.Example.com/")
+    monkeypatch.setenv(
+        "DOTLOOP_MCP_AUTH_RESOURCE_SERVER_URL",
+        "https://Dotloop-Mcp.Example.com/mcp/",
+    )
+    monkeypatch.setenv(
+        "DOTLOOP_MCP_AUTH_JWKS_URL",
+        "https://Auth.Example.com/.well-known/jwks.json",
+    )
+    monkeypatch.setenv("DOTLOOP_MCP_AUTH_REQUIRED_SCOPES", "dotloop:read, profile:read")
+    monkeypatch.setenv("DOTLOOP_MCP_AUTH_ALLOWED_ALGORITHMS", "RS256, ES256")
+    monkeypatch.setenv("DOTLOOP_MCP_AUTH_TOKEN_LEEWAY_SECONDS", "0")
+    monkeypatch.setenv("DOTLOOP_MCP_AUTH_JWKS_CACHE_SECONDS", "60")
+
+    settings = DotloopMcpAuthSettings.from_env()
+
+    assert settings.enabled is True
+    assert settings.issuer_url == "https://auth.example.com"
+    assert settings.resource_server_url == "https://dotloop-mcp.example.com/mcp"
+    assert settings.jwks_url == "https://auth.example.com/.well-known/jwks.json"
+    assert settings.required_scopes == ("dotloop:read", "profile:read")
+    assert settings.allowed_algorithms == ("RS256", "ES256")
+    assert settings.token_leeway_seconds == 0
+    assert settings.jwks_cache_seconds == 60
+
+
+def test_mcp_auth_settings_allows_empty_required_scopes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DOTLOOP_MCP_AUTH_ENABLED", "1")
+    monkeypatch.setenv("DOTLOOP_MCP_AUTH_ISSUER_URL", "http://127.0.0.1/auth")
+    monkeypatch.setenv("DOTLOOP_MCP_AUTH_RESOURCE_SERVER_URL", "http://127.0.0.1/mcp")
+    monkeypatch.setenv("DOTLOOP_MCP_AUTH_JWKS_URL", "http://127.0.0.1/jwks")
+    monkeypatch.setenv("DOTLOOP_MCP_AUTH_REQUIRED_SCOPES", "")
+
+    settings = DotloopMcpAuthSettings.from_env()
+
+    assert settings.required_scopes == ()
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://auth.example.com",
+        "https://user:pass@auth.example.com",
+        "https://auth.example.com:bad",
+        "https://auth.example.com?token=value",
+        "https://auth.example.com#fragment",
+    ],
+)
+def test_mcp_auth_settings_rejects_unsafe_urls(
+    monkeypatch: pytest.MonkeyPatch,
+    url: str,
+) -> None:
+    monkeypatch.setenv("DOTLOOP_MCP_AUTH_ENABLED", "1")
+    monkeypatch.setenv("DOTLOOP_MCP_AUTH_ISSUER_URL", url)
+    monkeypatch.setenv("DOTLOOP_MCP_AUTH_RESOURCE_SERVER_URL", "https://dotloop.example.com/mcp")
+    monkeypatch.setenv(
+        "DOTLOOP_MCP_AUTH_JWKS_URL",
+        "https://auth.example.com/.well-known/jwks.json",
+    )
+
+    with pytest.raises(DotloopConfigurationError):
+        DotloopMcpAuthSettings.from_env()
 
 
 def test_error_mapping_uses_safe_messages() -> None:

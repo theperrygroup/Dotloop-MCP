@@ -9,8 +9,14 @@ import pytest
 from tests.conftest import FakeDotloopClient
 
 from dotloop_mcp import cli as cli_module
+from dotloop_mcp import hosted_reference as hosted_module
 from dotloop_mcp import mcp_server as server_module
-from dotloop_mcp.config import DotloopServerSettings, DotloopSettings
+from dotloop_mcp.config import (
+    DotloopConfigurationError,
+    DotloopMcpAuthSettings,
+    DotloopServerSettings,
+    DotloopSettings,
+)
 from dotloop_mcp.coverage import (
     API_COVERAGE_MARKDOWN,
     COVERAGE_RESOURCE_URI,
@@ -79,6 +85,45 @@ def test_cli_runs_streamable_http_with_overrides(monkeypatch: pytest.MonkeyPatch
     assert calls[0]["host"] == "0.0.0.0"
     assert calls[0]["port"] == 9000
     assert calls[0]["streamable_http_path"] == "/custom"
+
+
+def test_hosted_reference_requires_mcp_auth(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(DotloopServerSettings, "from_env", lambda: DotloopServerSettings())
+
+    with pytest.raises(DotloopConfigurationError, match="DOTLOOP_MCP_AUTH_ENABLED"):
+        hosted_module.main([])
+
+
+def test_hosted_reference_runs_streamable_http_with_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_server = RunnableServer()
+    calls: list[dict[str, object]] = []
+    settings = DotloopServerSettings(
+        mcp_auth=DotloopMcpAuthSettings(
+            enabled=True,
+            issuer_url="http://127.0.0.1/auth",
+            resource_server_url="http://127.0.0.1/mcp",
+            jwks_url="http://127.0.0.1/jwks",
+        )
+    )
+
+    def fake_create_server(**kwargs: object) -> RunnableServer:
+        calls.append(kwargs)
+        return fake_server
+
+    monkeypatch.setattr(DotloopServerSettings, "from_env", lambda: settings)
+    monkeypatch.setattr(hosted_module, "create_server", fake_create_server)
+
+    assert hosted_module.main(["--host", "0.0.0.0", "--port", "9000", "--path", "/custom"]) == 0
+
+    assert fake_server.transports == ["streamable-http"]
+    server_settings = calls[0]["server_settings"]
+    assert isinstance(server_settings, DotloopServerSettings)
+    assert server_settings.transport == "streamable-http"
+    assert server_settings.host == "0.0.0.0"
+    assert server_settings.port == 9000
+    assert server_settings.streamable_http_path == "/custom"
 
 
 @pytest.mark.asyncio

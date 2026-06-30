@@ -1,0 +1,233 @@
+name: deploy-staging
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+      ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+      LOG_GROUP_NAME: ${{ vars.LOG_GROUP_NAME }}
+      MCP_AUTH_AUDIENCE: ${{ vars.MCP_AUTH_AUDIENCE }}
+      MCP_AUTH_ISSUER_URL: ${{ vars.MCP_AUTH_ISSUER_URL }}
+      MCP_AUTH_JWKS_URL: ${{ vars.MCP_AUTH_JWKS_URL }}
+      MCP_AUTH_REQUIRED_SCOPES: ${{ vars.MCP_AUTH_REQUIRED_SCOPES || 'dotloop:read' }}
+      MCP_AUTH_RESOURCE_SERVER_URL: ${{ vars.MCP_AUTH_RESOURCE_SERVER_URL }}
+      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+      DOTLOOP_ACCESS_TOKEN_SECRET_ARN: ${{ secrets.DOTLOOP_ACCESS_TOKEN_SECRET_ARN }}
+      TASK_EXECUTION_ROLE_ARN: ${{ secrets.TASK_EXECUTION_ROLE_ARN }}
+      TASK_ROLE_ARN: ${{ secrets.TASK_ROLE_ARN }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Verify staging workflow configuration
+        shell: bash
+        run: |
+          required_values=(
+            AWS_REGION
+            ECR_REPOSITORY
+            ECS_CLUSTER
+            ECS_SERVICE
+            LOG_GROUP_NAME
+            MCP_AUTH_ISSUER_URL
+            MCP_AUTH_JWKS_URL
+            MCP_AUTH_RESOURCE_SERVER_URL
+            AWS_ROLE_TO_ASSUME
+            DOTLOOP_ACCESS_TOKEN_SECRET_ARN
+            TASK_EXECUTION_ROLE_ARN
+            TASK_ROLE_ARN
+          )
+          for name in "${required_values[@]}"; do
+            if [ -z "${!name}" ]; then
+              printf "Missing required staging configuration: %s\n" "${name}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Run release validation
+        run: make release-validate
+
+  deploy:
+    needs:
+      - validate
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+      ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+      LOG_GROUP_NAME: ${{ vars.LOG_GROUP_NAME }}
+      MCP_AUTH_AUDIENCE: ${{ vars.MCP_AUTH_AUDIENCE }}
+      MCP_AUTH_ISSUER_URL: ${{ vars.MCP_AUTH_ISSUER_URL }}
+      MCP_AUTH_JWKS_URL: ${{ vars.MCP_AUTH_JWKS_URL }}
+      MCP_AUTH_REQUIRED_SCOPES: ${{ vars.MCP_AUTH_REQUIRED_SCOPES || 'dotloop:read' }}
+      MCP_AUTH_RESOURCE_SERVER_URL: ${{ vars.MCP_AUTH_RESOURCE_SERVER_URL }}
+      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+      DOTLOOP_ACCESS_TOKEN_SECRET_ARN: ${{ secrets.DOTLOOP_ACCESS_TOKEN_SECRET_ARN }}
+      TASK_EXECUTION_ROLE_ARN: ${{ secrets.TASK_EXECUTION_ROLE_ARN }}
+      TASK_ROLE_ARN: ${{ secrets.TASK_ROLE_ARN }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push hosted image
+        id: build-image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          provenance: false
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:staging
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:sha-${{ github.sha }}
+
+      - name: Prepare immutable image reference
+        id: image-ref
+        shell: bash
+        run: |
+          printf "image_uri=%s/%s@%s\n" \
+            "${{ steps.login-ecr.outputs.registry }}" \
+            "${ECR_REPOSITORY}" \
+            "${{ steps.build-image.outputs.digest }}" >> "${GITHUB_OUTPUT}"
+
+      - name: Render ECS task definition
+        shell: bash
+        env:
+          IMAGE_URI: ${{ steps.image-ref.outputs.image_uri }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+          from typing import Any
+
+          def replace_placeholders(value: Any, replacements: dict[str, str]) -> Any:
+              if isinstance(value, str):
+                  rendered = value
+                  for placeholder, replacement in replacements.items():
+                      rendered = rendered.replace(placeholder, replacement)
+                  return rendered
+              if isinstance(value, list):
+                  return [replace_placeholders(item, replacements) for item in value]
+              if isinstance(value, dict):
+                  return {
+                      key: replace_placeholders(item, replacements)
+                      for key, item in value.items()
+                  }
+              return value
+
+          replacements = {
+              "__AWS_REGION__": os.environ["AWS_REGION"],
+              "__DOTLOOP_ACCESS_TOKEN_SECRET_ARN__": os.environ[
+                  "DOTLOOP_ACCESS_TOKEN_SECRET_ARN"
+              ],
+              "__IMAGE_URI__": os.environ["IMAGE_URI"],
+              "__LOG_GROUP_NAME__": os.environ["LOG_GROUP_NAME"],
+              "__MCP_AUTH_AUDIENCE__": os.environ.get("MCP_AUTH_AUDIENCE", ""),
+              "__MCP_AUTH_ISSUER_URL__": os.environ["MCP_AUTH_ISSUER_URL"],
+              "__MCP_AUTH_JWKS_URL__": os.environ["MCP_AUTH_JWKS_URL"],
+              "__MCP_AUTH_REQUIRED_SCOPES__": os.environ.get("MCP_AUTH_REQUIRED_SCOPES")
+              or "dotloop:read",
+              "__MCP_AUTH_RESOURCE_SERVER_URL__": os.environ[
+                  "MCP_AUTH_RESOURCE_SERVER_URL"
+              ],
+              "__TASK_EXECUTION_ROLE_ARN__": os.environ["TASK_EXECUTION_ROLE_ARN"],
+              "__TASK_ROLE_ARN__": os.environ["TASK_ROLE_ARN"],
+          }
+
+          template_path = Path("deploy/ecs/task-definition.template.json")
+          rendered_path = Path("deploy/ecs/task-definition.rendered.json")
+          task_definition = json.loads(template_path.read_text(encoding="utf-8"))
+          rendered_task_definition = replace_placeholders(task_definition, replacements)
+          rendered_text = json.dumps(rendered_task_definition, indent=2) + "\n"
+          missing = sorted(set(re.findall(r"__[A-Z0-9_]+__", rendered_text)))
+          if missing:
+              raise SystemExit(f"Unrendered ECS placeholders remain: {missing}")
+          rendered_path.write_text(rendered_text, encoding="utf-8")
+          PY
+
+      - name: Register ECS task definition
+        id: register-task
+        shell: bash
+        run: |
+          aws ecs register-task-definition \
+            --cli-input-json file://deploy/ecs/task-definition.rendered.json \
+            --region "${AWS_REGION}" > "${RUNNER_TEMP}/task-definition.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(
+              Path(os.environ["RUNNER_TEMP"], "task-definition.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          task_definition_arn = payload["taskDefinition"]["taskDefinitionArn"]
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output_file:
+              output_file.write(f"task_definition_arn={task_definition_arn}\n")
+          PY
+
+      - name: Deploy ECS service
+        shell: bash
+        run: |
+          aws ecs update-service \
+            --cluster "${ECS_CLUSTER}" \
+            --service "${ECS_SERVICE}" \
+            --task-definition "${{ steps.register-task.outputs.task_definition_arn }}" \
+            --force-new-deployment \
+            --region "${AWS_REGION}"
+
+      - name: Wait for service stability
+        shell: bash
+        run: |
+          aws ecs wait services-stable \
+            --cluster "${ECS_CLUSTER}" \
+            --services "${ECS_SERVICE}" \
+            --region "${AWS_REGION}"
