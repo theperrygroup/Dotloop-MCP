@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, ClassVar, cast
 
+import httpx
 import pytest
 from tests.conftest import FakeDotloopClient
 
@@ -13,6 +14,7 @@ from dotloop_mcp import hosted_reference as hosted_module
 from dotloop_mcp import mcp_server as server_module
 from dotloop_mcp.config import (
     DotloopConfigurationError,
+    DotloopHostedOAuthSettings,
     DotloopMcpAuthSettings,
     DotloopServerSettings,
     DotloopSettings,
@@ -180,6 +182,38 @@ async def test_create_server_can_boot_with_unavailable_dotloop_credentials(
         server_module.create_server(server_settings=DotloopServerSettings())
     with pytest.raises(Exception, match="Dotloop access token is not configured"):
         await server.call_tool("dotloop_get_account", {})
+
+
+@pytest.mark.asyncio
+async def test_create_server_mounts_hosted_oauth_routes() -> None:
+    server = server_module.create_server(
+        server_settings=DotloopServerSettings(
+            transport="streamable-http",
+            mcp_auth=DotloopMcpAuthSettings(
+                enabled=True,
+                issuer_url="http://127.0.0.1:8000",
+                resource_server_url="http://127.0.0.1:8000/mcp",
+                jwks_url="http://127.0.0.1:8000/.well-known/jwks.json",
+            ),
+            hosted_oauth=DotloopHostedOAuthSettings(
+                enabled=True,
+                public_consent_enabled=True,
+            ),
+        ),
+        service=DotloopService(FakeDotloopClient()),
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=server.streamable_http_app()),
+        base_url="http://127.0.0.1:8000",
+    ) as client:
+        metadata_response = await client.get("/.well-known/oauth-authorization-server")
+        jwks_response = await client.get("/.well-known/jwks.json")
+        protected_resource_response = await client.get("/.well-known/oauth-protected-resource/mcp")
+
+    assert metadata_response.status_code == 200
+    assert metadata_response.json()["issuer"] == "http://127.0.0.1:8000"
+    assert jwks_response.status_code == 200
+    assert protected_resource_response.status_code == 200
 
 
 @pytest.mark.asyncio

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 from dotloop import DotloopClient
+from starlette.applications import Starlette
 
 from dotloop_mcp.auth import DotloopMcpJwtVerifier, build_mcp_auth_settings
 from dotloop_mcp.config import DotloopConfigurationError, DotloopServerSettings, DotloopSettings
@@ -16,7 +17,6 @@ from dotloop_mcp.mcp_tools import DotloopToolAdapter
 from dotloop_mcp.services import DotloopService, UnavailableDotloopService
 from mcp.server.auth.provider import TokenVerifier
 from mcp.server.fastmcp import FastMCP
-from starlette.applications import Starlette
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 

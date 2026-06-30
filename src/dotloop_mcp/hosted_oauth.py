@@ -19,8 +19,11 @@ from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Re
 from starlette.routing import Route
 
 from dotloop_mcp.auth import DotloopMcpJwtVerifier
-from dotloop_mcp.config import DotloopConfigurationError, DotloopHostedOAuthSettings
-from dotloop_mcp.config import DotloopMcpAuthSettings
+from dotloop_mcp.config import (
+    DotloopConfigurationError,
+    DotloopHostedOAuthSettings,
+    DotloopMcpAuthSettings,
+)
 
 _SUPPORTED_CODE_CHALLENGE_METHODS = {"plain", "S256"}
 _DEFAULT_SUBJECT = "dotloop-hosted-user"
@@ -162,7 +165,10 @@ class DotloopHostedOAuthApplication:
         ):
             return _oauth_error("invalid_client_metadata", "redirect_uris must be valid URIs.", 400)
 
-        requested_scopes = _requested_scopes(payload.get("scope"), self._auth_settings.required_scopes)
+        requested_scopes = _requested_scopes(
+            payload.get("scope"),
+            self._auth_settings.required_scopes,
+        )
         if not self._scopes_supported(requested_scopes):
             return _oauth_error("invalid_scope", "Requested scope is not supported.", 400)
 
@@ -217,7 +223,10 @@ class DotloopHostedOAuthApplication:
         redirect_params = {"code": code}
         if params.get("state"):
             redirect_params["state"] = params["state"]
-        return RedirectResponse(_append_query_params(redirect_uri, redirect_params), status_code=302)
+        return RedirectResponse(
+            _append_query_params(redirect_uri, redirect_params),
+            status_code=302,
+        )
 
     async def token(self, request: Request) -> JSONResponse:
         """Exchange an authorization code or refresh token for a Bearer access token."""
@@ -245,7 +254,10 @@ class DotloopHostedOAuthApplication:
         authorization_code = self._authorization_codes.pop(code, None)
         if authorization_code is None or authorization_code.expires_at < self._now():
             return _oauth_error("invalid_grant", "Authorization code is invalid or expired.", 400)
-        if authorization_code.client_id != client_id or authorization_code.redirect_uri != redirect_uri:
+        if (
+            authorization_code.client_id != client_id
+            or authorization_code.redirect_uri != redirect_uri
+        ):
             return _oauth_error("invalid_grant", "Authorization code binding is invalid.", 400)
         if not _verify_pkce(
             verifier=code_verifier,
@@ -327,7 +339,11 @@ class DotloopHostedOAuthApplication:
 
     def _validate_authorize_params(self, params: dict[str, str]) -> Response | None:
         if params.get("response_type") != "code":
-            return _oauth_error("unsupported_response_type", "Only response_type=code is supported.", 400)
+            return _oauth_error(
+                "unsupported_response_type",
+                "Only response_type=code is supported.",
+                400,
+            )
         client_id = params.get("client_id")
         if not client_id or client_id not in self._clients:
             return _oauth_error("invalid_request", "Unknown client_id.", 400)
@@ -340,7 +356,10 @@ class DotloopHostedOAuthApplication:
         code_challenge_method = params.get("code_challenge_method") or "plain"
         if code_challenge_method not in _SUPPORTED_CODE_CHALLENGE_METHODS:
             return _oauth_error("invalid_request", "Unsupported code_challenge_method.", 400)
-        requested_scopes = _requested_scopes(params.get("scope"), self._clients[client_id].scopes)
+        requested_scopes = _requested_scopes(
+            params.get("scope"),
+            self._clients[client_id].scopes,
+        )
         if not self._scopes_supported(requested_scopes):
             return _oauth_error("invalid_scope", "Requested scope is not supported.", 400)
         return None
@@ -399,7 +418,10 @@ def _is_redirect_uri(value: str) -> bool:
 
 def _append_query_params(url: str, params: dict[str, str]) -> str:
     parsed = urlsplit(url)
-    query = urlencode({**dict(parse_qs(parsed.query, keep_blank_values=True)), **params}, doseq=True)
+    query = urlencode(
+        {**dict(parse_qs(parsed.query, keep_blank_values=True)), **params},
+        doseq=True,
+    )
     return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, query, parsed.fragment))
 
 
@@ -423,7 +445,7 @@ def _oauth_error(error: str, description: str, status_code: int) -> JSONResponse
 
 def _html_page(title: str, body: str) -> str:
     return (
-        "<!doctype html><html><head><meta charset=\"utf-8\">"
+        '<!doctype html><html><head><meta charset="utf-8">'
         f"<title>{title}</title></head><body>"
         f"<h1>{title}</h1><p>{body}</p>"
         "</body></html>"

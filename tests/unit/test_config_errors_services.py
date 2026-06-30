@@ -25,6 +25,7 @@ from tests.conftest import FakeDotloopClient
 
 from dotloop_mcp.config import (
     DotloopConfigurationError,
+    DotloopHostedOAuthSettings,
     DotloopMcpAuthSettings,
     DotloopServerSettings,
     DotloopSettings,
@@ -211,6 +212,22 @@ def test_mcp_auth_settings_allows_empty_required_scopes(
     settings = DotloopMcpAuthSettings.from_env()
 
     assert settings.required_scopes == ()
+
+
+def test_hosted_oauth_settings_loads_staging_switches(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DOTLOOP_MCP_HOSTED_OAUTH_ENABLED", "1")
+    monkeypatch.setenv("DOTLOOP_MCP_HOSTED_OAUTH_PUBLIC_CONSENT_ENABLED", "true")
+    monkeypatch.setenv("DOTLOOP_MCP_HOSTED_OAUTH_AUTHORIZATION_CODE_SECONDS", "120")
+    monkeypatch.setenv("DOTLOOP_MCP_HOSTED_OAUTH_ACCESS_TOKEN_SECONDS", "600")
+    monkeypatch.setenv("DOTLOOP_MCP_HOSTED_OAUTH_REFRESH_TOKEN_SECONDS", "900")
+
+    settings = DotloopHostedOAuthSettings.from_env()
+
+    assert settings.enabled is True
+    assert settings.public_consent_enabled is True
+    assert settings.authorization_code_seconds == 120
+    assert settings.access_token_seconds == 600
+    assert settings.refresh_token_seconds == 900
 
 
 @pytest.mark.parametrize(
